@@ -162,7 +162,7 @@ function AppContent() {
       loadWeather(loc);
       loadLocalVotes(loc);
       loadAccuracy(loc);
-      syncLocationToUrl(loc);
+      setTimeout(() => syncLocationToUrl(loc), 0);
       try {
         localStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(loc));
       } catch {
