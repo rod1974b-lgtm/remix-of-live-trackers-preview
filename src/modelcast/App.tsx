@@ -33,6 +33,44 @@ import { FavoritePlaces } from '@/modelcast/components/FavoritePlaces';
 
 const LAST_LOCATION_KEY = 'modelcast:last-location';
 
+function getLocationFromUrl(): GeoLocation | null {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const lat = Number(p.get('lat'));
+    const lon = Number(p.get('lon'));
+    const city = p.get('city');
+    if (!city || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return {
+      id: Number(p.get('cid')) || Math.round(Math.abs(lat * 1000 + lon * 10)),
+      name: city,
+      latitude: lat,
+      longitude: lon,
+      country: p.get('country') ?? '',
+      country_code: p.get('cc') ?? '',
+      timezone: p.get('tz') ?? 'auto',
+    } as GeoLocation;
+  } catch {
+    return null;
+  }
+}
+
+function syncLocationToUrl(loc: GeoLocation) {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('city', loc.name ?? '');
+    url.searchParams.set('lat', String(loc.latitude));
+    url.searchParams.set('lon', String(loc.longitude));
+    url.searchParams.set('cid', String(loc.id));
+    if (loc.country) url.searchParams.set('country', loc.country);
+    if ((loc as { country_code?: string }).country_code)
+      url.searchParams.set('cc', (loc as { country_code?: string }).country_code!);
+    if (loc.timezone) url.searchParams.set('tz', loc.timezone);
+    window.history.replaceState(null, '', url.toString());
+  } catch {
+    // ignore
+  }
+}
+
 function AppContent() {
   const { t } = useSettings();
   const [location, setLocation] = useState<GeoLocation | null>(null);
@@ -48,8 +86,19 @@ function AppContent() {
   const [accuracyResults, setAccuracyResults] = useState<ModelAccuracy[]>([]);
   const [activeView, setActiveView] = useState<'forecast' | 'logs'>('forecast');
   const [refreshing, setRefreshing] = useState(false);
-  const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
+  const {
+    favorites,
+    addFavorite,
+    removeFavorite,
+    isFavorite,
+    copyShareLink,
+    exportBackup,
+    restoreBackup,
+  } = useFavorites();
   const [restored, setRestored] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const loadWeather = useCallback(async (loc: GeoLocation, force = false) => {
