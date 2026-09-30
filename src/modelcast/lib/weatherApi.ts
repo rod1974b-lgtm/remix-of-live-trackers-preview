@@ -137,7 +137,8 @@ export async function fetchHourlyForecast(lat: number, lon: number, forceRefresh
   const cached = forceRefresh ? null : getCached<HourlyForecast>(key);
   if (cached) return cached;
 
-  const data = await fetchMultimodel(lat, lon);
+  const data = await fetchMultimodel(lat, lon, forceRefresh);
+
   const hourly = data.hourly ?? {};
 
   const time = (hourly['time'] as string[]) ?? [];
