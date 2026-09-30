@@ -306,6 +306,41 @@ function AppContent() {
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             <SettingsBar />
             <button
+              onClick={() => void handleShare()}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${shareCopied ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+              title="Copy a link that keeps your cities and settings"
+            >
+              {shareCopied ? <Check size={16} /> : <Share2 size={16} />}
+              <span>{shareCopied ? 'Link Copied!' : 'Share'}</span>
+            </button>
+            <button
+              onClick={exportBackup}
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-500/20 px-3 py-1.5 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-500/30"
+              title="Download a backup of your cities and settings"
+            >
+              <Download size={16} />
+              <span>Backup</span>
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${restoreMsg ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+              title="Restore from a backup file"
+            >
+              <Upload size={16} />
+              <span>{restoreMsg ?? 'Restore'}</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImportFile(file);
+                e.target.value = '';
+              }}
+            />
+            <button
               onClick={() => setActiveView(activeView === 'logs' ? 'forecast' : 'logs')}
               className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${activeView === 'logs' ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
             >
