@@ -1,0 +1,11 @@
+[functions.hurricane-tracker]
+verify_jwt = false
+
+[functions.himawari-proxy]
+verify_jwt = false
+
+[functions.weather-alerts]
+verify_jwt = false
+
+[functions.lightning-proxy]
+verify_jwt = false
