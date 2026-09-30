@@ -1,6 +1,7 @@
 // @ts-nocheck -- imported Bolt code, written for a looser TS config
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CloudSun, Loader2, AlertTriangle, Globe2, Radar, Layers, ClipboardList, RefreshCw } from 'lucide-react';
+import { CloudSun, Loader2, AlertTriangle, Globe2, Radar, Layers, ClipboardList, RefreshCw, Share2, Check, Navigation, Download, Upload } from 'lucide-react';
+import { useRef } from 'react';
 import { SearchBar } from '@/modelcast/components/SearchBar';
 import { CurrentWeatherCard } from '@/modelcast/components/CurrentWeatherCard';
 import { TopModelForecast } from '@/modelcast/components/TopModelForecast';
@@ -32,6 +33,44 @@ import { FavoritePlaces } from '@/modelcast/components/FavoritePlaces';
 
 const LAST_LOCATION_KEY = 'modelcast:last-location';
 
+function getLocationFromUrl(): GeoLocation | null {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const lat = Number(p.get('lat'));
+    const lon = Number(p.get('lon'));
+    const city = p.get('city');
+    if (!city || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return {
+      id: Number(p.get('cid')) || Math.round(Math.abs(lat * 1000 + lon * 10)),
+      name: city,
+      latitude: lat,
+      longitude: lon,
+      country: p.get('country') ?? '',
+      country_code: p.get('cc') ?? '',
+      timezone: p.get('tz') ?? 'auto',
+    } as GeoLocation;
+  } catch {
+    return null;
+  }
+}
+
+function syncLocationToUrl(loc: GeoLocation) {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('city', loc.name ?? '');
+    url.searchParams.set('lat', String(loc.latitude));
+    url.searchParams.set('lon', String(loc.longitude));
+    url.searchParams.set('cid', String(loc.id));
+    if (loc.country) url.searchParams.set('country', loc.country);
+    if ((loc as { country_code?: string }).country_code)
+      url.searchParams.set('cc', (loc as { country_code?: string }).country_code!);
+    if (loc.timezone) url.searchParams.set('tz', loc.timezone);
+    window.history.replaceState(null, '', url.toString());
+  } catch {
+    // ignore
+  }
+}
+
 function AppContent() {
   const { t } = useSettings();
   const [location, setLocation] = useState<GeoLocation | null>(null);
@@ -47,8 +86,19 @@ function AppContent() {
   const [accuracyResults, setAccuracyResults] = useState<ModelAccuracy[]>([]);
   const [activeView, setActiveView] = useState<'forecast' | 'logs'>('forecast');
   const [refreshing, setRefreshing] = useState(false);
-  const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
+  const {
+    favorites,
+    addFavorite,
+    removeFavorite,
+    isFavorite,
+    copyShareLink,
+    exportBackup,
+    restoreBackup,
+  } = useFavorites();
   const [restored, setRestored] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const loadWeather = useCallback(async (loc: GeoLocation, force = false) => {
@@ -112,6 +162,7 @@ function AppContent() {
       loadWeather(loc);
       loadLocalVotes(loc);
       loadAccuracy(loc);
+      setTimeout(() => syncLocationToUrl(loc), 0);
       try {
         localStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(loc));
       } catch {
@@ -121,18 +172,58 @@ function AppContent() {
     [loadWeather, loadLocalVotes, loadAccuracy],
   );
 
+  const handleShare = useCallback(async () => {
+    const ok = await copyShareLink();
+    if (ok) {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }
+  }, [copyShareLink]);
+
+  const handleLocateMe = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        handleSelect({
+          id: Math.round(Math.abs(pos.coords.latitude * 1000 + pos.coords.longitude * 10)),
+          name: 'My Location',
+          latitude: Number(pos.coords.latitude.toFixed(4)),
+          longitude: Number(pos.coords.longitude.toFixed(4)),
+          country: '',
+          timezone: 'auto',
+        } as GeoLocation);
+      },
+      () => setError('Could not get your location. Please allow location access.'),
+    );
+  }, [handleSelect]);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      const ok = restoreBackup(text);
+      setRestoreMsg(ok ? 'Backup restored!' : 'Invalid backup file.');
+      setTimeout(() => setRestoreMsg(null), 2500);
+    },
+    [restoreBackup],
+  );
+
   useEffect(() => {
     loadGlobalVotes();
   }, [loadGlobalVotes]);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(LAST_LOCATION_KEY);
-      if (raw) {
-        const last = JSON.parse(raw) as GeoLocation;
-        handleSelect(last);
+      const fromUrl = getLocationFromUrl();
+      if (fromUrl) {
+        handleSelect(fromUrl);
       } else {
-        handleSelect({ id: 1150965, name: 'Ratchaburi', latitude: 13.54, longitude: 99.82, country: 'Thailand', admin1: 'Ratchaburi', timezone: 'Asia/Bangkok', country_code: 'TH' } as GeoLocation);
+        const raw = localStorage.getItem(LAST_LOCATION_KEY);
+        if (raw) {
+          const last = JSON.parse(raw) as GeoLocation;
+          handleSelect(last);
+        } else {
+          handleSelect({ id: 1150965, name: 'Ratchaburi', latitude: 13.54, longitude: 99.82, country: 'Thailand', admin1: 'Ratchaburi', timezone: 'Asia/Bangkok', country_code: 'TH' } as GeoLocation);
+        }
       }
     } catch {
       // ignore
@@ -215,6 +306,41 @@ function AppContent() {
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
             <SettingsBar />
             <button
+              onClick={() => void handleShare()}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${shareCopied ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+              title="Copy a link that keeps your cities and settings"
+            >
+              {shareCopied ? <Check size={16} /> : <Share2 size={16} />}
+              <span>{shareCopied ? 'Link Copied!' : 'Share'}</span>
+            </button>
+            <button
+              onClick={exportBackup}
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-500/20 px-3 py-1.5 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-500/30"
+              title="Download a backup of your cities and settings"
+            >
+              <Download size={16} />
+              <span>Backup</span>
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${restoreMsg ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+              title="Restore from a backup file"
+            >
+              <Upload size={16} />
+              <span>{restoreMsg ?? 'Restore'}</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImportFile(file);
+                e.target.value = '';
+              }}
+            />
+            <button
               onClick={() => setActiveView(activeView === 'logs' ? 'forecast' : 'logs')}
               className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${activeView === 'logs' ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
             >
@@ -255,8 +381,16 @@ function AppContent() {
           <p className="mx-auto mt-2 max-w-lg text-slate-400">
             {t('findBestDesc', { count: WEATHER_MODELS.length })}
           </p>
-          <div className="mt-6 flex justify-center">
+          <div className="mt-6 flex items-center justify-center gap-2">
             <SearchBar onSelect={handleSelect} currentLocation={location} />
+            <button
+              onClick={handleLocateMe}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700"
+              title="Use my current location"
+            >
+              <Navigation size={16} />
+              <span className="hidden sm:inline">Locate Me</span>
+            </button>
           </div>
           {(favorites.length > 0 || (location && !isFavorite(location.id))) && (
             <div className="mt-4 flex justify-center">
