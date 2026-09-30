@@ -178,7 +178,7 @@ export async function fetchDailyForecast(lat: number, lon: number, forceRefresh 
   const cached = forceRefresh ? null : getCached<DailyForecast>(key);
   if (cached) return cached;
 
-  const data = await fetchMultimodel(lat, lon);
+  const data = await fetchMultimodel(lat, lon, forceRefresh);
   const daily = data.daily ?? {};
 
   const time = (daily['time'] as string[]) ?? [];
