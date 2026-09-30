@@ -87,8 +87,8 @@ interface MultimodelResponse {
   daily?: Record<string, (number | null)[] | string[]>;
 }
 
-async function fetchMultimodel(lat: number, lon: number): Promise<MultimodelResponse> {
-  const modelParam = MODEL_IDS.join(',');
+async function executeMultimodelQuery(lat: number, lon: number, models: string[]): Promise<MultimodelResponse> {
+  const modelParam = models.join(',');
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&hourly=temperature_2m,precipitation,weather_code,wind_speed_10m,relative_humidity_2m,precipitation_probability` +
@@ -96,10 +96,41 @@ async function fetchMultimodel(lat: number, lon: number): Promise<MultimodelResp
     `&models=${modelParam}` +
     `&timezone=auto&forecast_days=7`;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Multimodel request failed: ${res.status}`);
+  const res = await fetchWithRetry(url, 2, 1000);
   return res.json();
 }
+
+async function fetchMultimodel(lat: number, lon: number, forceRefresh = false): Promise<MultimodelResponse> {
+  const key = `raw_multimodel_${lat.toFixed(2)},${lon.toFixed(2)}`;
+
+  if (!forceRefresh) {
+    const cached = getCached<MultimodelResponse>(key);
+    if (cached) return cached;
+  }
+
+  if (inFlightMultimodel.has(key)) {
+    return inFlightMultimodel.get(key)!;
+  }
+
+  const queryPromise = (async () => {
+    try {
+      const data = await executeMultimodelQuery(lat, lon, MODEL_IDS);
+      setCached(key, data);
+      return data;
+    } catch (primaryErr) {
+      console.warn('Multimodel query with all models failed, falling back to core models:', primaryErr);
+      const fallbackData = await executeMultimodelQuery(lat, lon, CORE_FALLBACK_MODELS);
+      setCached(key, fallbackData);
+      return fallbackData;
+    } finally {
+      inFlightMultimodel.delete(key);
+    }
+  })();
+
+  inFlightMultimodel.set(key, queryPromise);
+  return queryPromise;
+}
+
 
 export async function fetchHourlyForecast(lat: number, lon: number, forceRefresh = false): Promise<HourlyForecast> {
   const key = `hourly_${lat.toFixed(2)},${lon.toFixed(2)}`;
