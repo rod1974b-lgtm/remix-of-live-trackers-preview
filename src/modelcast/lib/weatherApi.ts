@@ -5,6 +5,17 @@ import { MODEL_IDS } from './weatherModels';
 const cache = new Map<string, { data: unknown; ts: number }>();
 const CACHE_MS = 30 * 60 * 1000;
 
+// Shares one in-flight request between the hourly and daily loaders
+const inFlightMultimodel = new Map<string, Promise<MultimodelResponse>>();
+
+const CORE_FALLBACK_MODELS = [
+  'ecmwf_ifs04',
+  'gfs_seamless',
+  'icon_seamless',
+  'meteofrance_seamless',
+  'ukmo_seamless',
+];
+
 function getCached<T>(key: string): T | null {
   const c = cache.get(key);
   if (c && Date.now() - c.ts < CACHE_MS) return c.data as T;
@@ -14,6 +25,31 @@ function getCached<T>(key: string): T | null {
 function setCached(key: string, data: unknown) {
   cache.set(key, { data, ts: Date.now() });
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchWithRetry(url: string, retries = 2, delayMs = 1000): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res;
+
+      if ([429, 502, 503, 504].includes(res.status) && attempt < retries) {
+        await sleep(delayMs * (attempt + 1));
+        continue;
+      }
+      throw new Error(`Request failed with status ${res.status}`);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < retries) {
+        await sleep(delayMs * (attempt + 1));
+      }
+    }
+  }
+  throw lastError ?? new Error('Network request failed');
+}
+
 
 export async function fetchCurrentWeather(lat: number, lon: number, forceRefresh = false): Promise<CurrentWeather> {
   const key = `current_${lat.toFixed(2)},${lon.toFixed(2)}`;
@@ -25,8 +61,8 @@ export async function fetchCurrentWeather(lat: number, lon: number, forceRefresh
     `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,pressure_msl` +
     `&timezone=auto`;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Current weather request failed: ${res.status}`);
+  const res = await fetchWithRetry(url, 2, 800);
+
   const data = await res.json();
   const c = data.current;
   if (!c) throw new Error('No current weather data in response');
@@ -51,8 +87,8 @@ interface MultimodelResponse {
   daily?: Record<string, (number | null)[] | string[]>;
 }
 
-async function fetchMultimodel(lat: number, lon: number): Promise<MultimodelResponse> {
-  const modelParam = MODEL_IDS.join(',');
+async function executeMultimodelQuery(lat: number, lon: number, models: string[]): Promise<MultimodelResponse> {
+  const modelParam = models.join(',');
   const url =
     `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&hourly=temperature_2m,precipitation,weather_code,wind_speed_10m,relative_humidity_2m,precipitation_probability` +
@@ -60,17 +96,49 @@ async function fetchMultimodel(lat: number, lon: number): Promise<MultimodelResp
     `&models=${modelParam}` +
     `&timezone=auto&forecast_days=7`;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Multimodel request failed: ${res.status}`);
+  const res = await fetchWithRetry(url, 2, 1000);
   return res.json();
 }
+
+async function fetchMultimodel(lat: number, lon: number, forceRefresh = false): Promise<MultimodelResponse> {
+  const key = `raw_multimodel_${lat.toFixed(2)},${lon.toFixed(2)}`;
+
+  if (!forceRefresh) {
+    const cached = getCached<MultimodelResponse>(key);
+    if (cached) return cached;
+  }
+
+  if (inFlightMultimodel.has(key)) {
+    return inFlightMultimodel.get(key)!;
+  }
+
+  const queryPromise = (async () => {
+    try {
+      const data = await executeMultimodelQuery(lat, lon, MODEL_IDS);
+      setCached(key, data);
+      return data;
+    } catch (primaryErr) {
+      console.warn('Multimodel query with all models failed, falling back to core models:', primaryErr);
+      const fallbackData = await executeMultimodelQuery(lat, lon, CORE_FALLBACK_MODELS);
+      setCached(key, fallbackData);
+      return fallbackData;
+    } finally {
+      inFlightMultimodel.delete(key);
+    }
+  })();
+
+  inFlightMultimodel.set(key, queryPromise);
+  return queryPromise;
+}
+
 
 export async function fetchHourlyForecast(lat: number, lon: number, forceRefresh = false): Promise<HourlyForecast> {
   const key = `hourly_${lat.toFixed(2)},${lon.toFixed(2)}`;
   const cached = forceRefresh ? null : getCached<HourlyForecast>(key);
   if (cached) return cached;
 
-  const data = await fetchMultimodel(lat, lon);
+  const data = await fetchMultimodel(lat, lon, forceRefresh);
+
   const hourly = data.hourly ?? {};
 
   const time = (hourly['time'] as string[]) ?? [];
@@ -110,7 +178,7 @@ export async function fetchDailyForecast(lat: number, lon: number, forceRefresh 
   const cached = forceRefresh ? null : getCached<DailyForecast>(key);
   if (cached) return cached;
 
-  const data = await fetchMultimodel(lat, lon);
+  const data = await fetchMultimodel(lat, lon, forceRefresh);
   const daily = data.daily ?? {};
 
   const time = (daily['time'] as string[]) ?? [];
