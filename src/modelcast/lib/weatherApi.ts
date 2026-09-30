@@ -61,8 +61,8 @@ export async function fetchCurrentWeather(lat: number, lon: number, forceRefresh
     `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,pressure_msl` +
     `&timezone=auto`;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Current weather request failed: ${res.status}`);
+  const res = await fetchWithRetry(url, 2, 800);
+
   const data = await res.json();
   const c = data.current;
   if (!c) throw new Error('No current weather data in response');
