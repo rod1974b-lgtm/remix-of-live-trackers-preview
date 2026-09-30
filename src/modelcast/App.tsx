@@ -162,6 +162,7 @@ function AppContent() {
       loadWeather(loc);
       loadLocalVotes(loc);
       loadAccuracy(loc);
+      syncLocationToUrl(loc);
       try {
         localStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(loc));
       } catch {
@@ -171,18 +172,58 @@ function AppContent() {
     [loadWeather, loadLocalVotes, loadAccuracy],
   );
 
+  const handleShare = useCallback(async () => {
+    const ok = await copyShareLink();
+    if (ok) {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }
+  }, [copyShareLink]);
+
+  const handleLocateMe = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        handleSelect({
+          id: Math.round(Math.abs(pos.coords.latitude * 1000 + pos.coords.longitude * 10)),
+          name: 'My Location',
+          latitude: Number(pos.coords.latitude.toFixed(4)),
+          longitude: Number(pos.coords.longitude.toFixed(4)),
+          country: '',
+          timezone: 'auto',
+        } as GeoLocation);
+      },
+      () => setError('Could not get your location. Please allow location access.'),
+    );
+  }, [handleSelect]);
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      const ok = restoreBackup(text);
+      setRestoreMsg(ok ? 'Backup restored!' : 'Invalid backup file.');
+      setTimeout(() => setRestoreMsg(null), 2500);
+    },
+    [restoreBackup],
+  );
+
   useEffect(() => {
     loadGlobalVotes();
   }, [loadGlobalVotes]);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(LAST_LOCATION_KEY);
-      if (raw) {
-        const last = JSON.parse(raw) as GeoLocation;
-        handleSelect(last);
+      const fromUrl = getLocationFromUrl();
+      if (fromUrl) {
+        handleSelect(fromUrl);
       } else {
-        handleSelect({ id: 1150965, name: 'Ratchaburi', latitude: 13.54, longitude: 99.82, country: 'Thailand', admin1: 'Ratchaburi', timezone: 'Asia/Bangkok', country_code: 'TH' } as GeoLocation);
+        const raw = localStorage.getItem(LAST_LOCATION_KEY);
+        if (raw) {
+          const last = JSON.parse(raw) as GeoLocation;
+          handleSelect(last);
+        } else {
+          handleSelect({ id: 1150965, name: 'Ratchaburi', latitude: 13.54, longitude: 99.82, country: 'Thailand', admin1: 'Ratchaburi', timezone: 'Asia/Bangkok', country_code: 'TH' } as GeoLocation);
+        }
       }
     } catch {
       // ignore
