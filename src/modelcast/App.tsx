@@ -381,8 +381,16 @@ function AppContent() {
           <p className="mx-auto mt-2 max-w-lg text-slate-400">
             {t('findBestDesc', { count: WEATHER_MODELS.length })}
           </p>
-          <div className="mt-6 flex justify-center">
+          <div className="mt-6 flex items-center justify-center gap-2">
             <SearchBar onSelect={handleSelect} currentLocation={location} />
+            <button
+              onClick={handleLocateMe}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700"
+              title="Use my current location"
+            >
+              <Navigation size={16} />
+              <span className="hidden sm:inline">Locate Me</span>
+            </button>
           </div>
           {(favorites.length > 0 || (location && !isFavorite(location.id))) && (
             <div className="mt-4 flex justify-center">
