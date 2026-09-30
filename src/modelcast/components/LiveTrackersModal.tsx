@@ -1147,11 +1147,19 @@ function buildHimawariFrames(region: SatRegion, band: SatBand): SatFrame[] {
 
 function proxySource(sat: string): () => Promise<string> {
   return async () => {
-    const res = await fetch(`${supabaseUrl}/functions/v1/himawari-proxy?sat=${sat}`, {
-      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
-    });
-    if (!res.ok) throw new Error(`himawari-proxy?sat=${sat}: HTTP ${res.status}`);
-    return URL.createObjectURL(await res.blob());
+    // Built-in proxy first (same-origin, always deployed with the app)…
+    try {
+      const res = await fetch(`/api/public/satellite?sat=${sat}`);
+      if (res.ok) return URL.createObjectURL(await res.blob());
+      throw new Error(`satellite proxy: HTTP ${res.status}`);
+    } catch {
+      // …then fall back to the external Supabase edge function if present.
+      const res = await fetch(`${supabaseUrl}/functions/v1/himawari-proxy?sat=${sat}`, {
+        headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` },
+      });
+      if (!res.ok) throw new FunctionHttpError('himawari-proxy', res.status);
+      return URL.createObjectURL(await res.blob());
+    }
   };
 }
 
