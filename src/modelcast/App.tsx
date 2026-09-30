@@ -1,6 +1,7 @@
 // @ts-nocheck -- imported Bolt code, written for a looser TS config
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CloudSun, Loader2, AlertTriangle, Globe2, Radar, Layers, ClipboardList, RefreshCw } from 'lucide-react';
+import { CloudSun, Loader2, AlertTriangle, Globe2, Radar, Layers, ClipboardList, RefreshCw, Share2, Check, Navigation, Download, Upload } from 'lucide-react';
+import { useRef } from 'react';
 import { SearchBar } from '@/modelcast/components/SearchBar';
 import { CurrentWeatherCard } from '@/modelcast/components/CurrentWeatherCard';
 import { TopModelForecast } from '@/modelcast/components/TopModelForecast';
