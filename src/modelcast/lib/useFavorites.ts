@@ -92,7 +92,7 @@ export function useFavorites() {
       if (prev.some((f) => f.id === loc.id)) return prev;
       const next = [...prev, loc];
       writeStorage(next);
-      syncFavoritesToUrl(next);
+      setTimeout(() => syncFavoritesToUrl(next), 0);
       return next;
     });
   }, []);
@@ -101,7 +101,7 @@ export function useFavorites() {
     setFavorites((prev) => {
       const next = prev.filter((f) => f.id !== id);
       writeStorage(next);
-      syncFavoritesToUrl(next);
+      setTimeout(() => syncFavoritesToUrl(next), 0);
       return next;
     });
   }, []);
