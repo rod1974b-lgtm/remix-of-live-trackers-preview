@@ -5,6 +5,17 @@ import { MODEL_IDS } from './weatherModels';
 const cache = new Map<string, { data: unknown; ts: number }>();
 const CACHE_MS = 30 * 60 * 1000;
 
+// Shares one in-flight request between the hourly and daily loaders
+const inFlightMultimodel = new Map<string, Promise<MultimodelResponse>>();
+
+const CORE_FALLBACK_MODELS = [
+  'ecmwf_ifs04',
+  'gfs_seamless',
+  'icon_seamless',
+  'meteofrance_seamless',
+  'ukmo_seamless',
+];
+
 function getCached<T>(key: string): T | null {
   const c = cache.get(key);
   if (c && Date.now() - c.ts < CACHE_MS) return c.data as T;
@@ -14,6 +25,31 @@ function getCached<T>(key: string): T | null {
 function setCached(key: string, data: unknown) {
   cache.set(key, { data, ts: Date.now() });
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchWithRetry(url: string, retries = 2, delayMs = 1000): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res;
+
+      if ([429, 502, 503, 504].includes(res.status) && attempt < retries) {
+        await sleep(delayMs * (attempt + 1));
+        continue;
+      }
+      throw new Error(`Request failed with status ${res.status}`);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < retries) {
+        await sleep(delayMs * (attempt + 1));
+      }
+    }
+  }
+  throw lastError ?? new Error('Network request failed');
+}
+
 
 export async function fetchCurrentWeather(lat: number, lon: number, forceRefresh = false): Promise<CurrentWeather> {
   const key = `current_${lat.toFixed(2)},${lon.toFixed(2)}`;
