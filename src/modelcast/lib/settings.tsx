@@ -11,7 +11,10 @@ interface SettingsContextValue {
   t: TFunc;
 }
 
-const SettingsContext = createContext<SettingsContextValue | null>(null);
+// Keep a single context instance across hot reloads so provider and consumers always match.
+const g = globalThis as unknown as { __modelcastSettingsCtx?: React.Context<SettingsContextValue | null> };
+const SettingsContext =
+  g.__modelcastSettingsCtx ?? (g.__modelcastSettingsCtx = createContext<SettingsContextValue | null>(null));
 
 const LANG_KEY = 'modelcast:language';
 const UNITS_KEY = 'modelcast:units';
