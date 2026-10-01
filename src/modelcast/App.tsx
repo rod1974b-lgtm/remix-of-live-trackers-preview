@@ -379,7 +379,7 @@ function AppContent() {
             {t('findBest')}
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-slate-400">
-            {t('findBestDesc', { count: WEATHER_MODELS.length })}
+            {t('findBestDesc')}
           </p>
           <div className="mt-6 flex items-center justify-center gap-2">
             <SearchBar onSelect={handleSelect} currentLocation={location} />
