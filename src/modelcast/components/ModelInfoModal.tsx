@@ -31,7 +31,7 @@ export function ModelInfoModal({ open, onClose }: ModelInfoModalProps) {
         </div>
 
         <p className="mb-4 text-sm text-slate-400">
-          {t('weatherModelsDesc', { count: WEATHER_MODELS.length })}
+          {t('weatherModelsDesc')}
         </p>
 
         <div className="space-y-3">
