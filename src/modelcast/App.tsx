@@ -481,6 +481,7 @@ function AppContent() {
           open={showModels}
           onClose={() => setShowModels(false)}
           location={location}
+          daily={daily}
           localVotes={localVotes}
           globalVotes={globalVotes}
           accuracy={accuracyResults}
