@@ -96,7 +96,7 @@ export function DailyForecastComparison({ data }: DailyForecastComparisonProps) 
             </tr>
           </thead>
           <tbody>
-            {WEATHER_MODELS.map((model) => {
+            {visibleModels.map((model) => {
               const m = data.models[model.id];
               if (!m) return null;
               return (
