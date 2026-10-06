@@ -49,10 +49,21 @@ export function DailyForecastComparison({ data }: DailyForecastComparisonProps) 
   const { t, units } = useSettings();
   const days = data.time;
 
+  // Hide models that returned no usable data at all (e.g. ECMWF IFS gaps).
+  const visibleModels = useMemo(
+    () =>
+      WEATHER_MODELS.filter((model) => {
+        const m = data.models[model.id];
+        if (!m) return false;
+        return m.tempMax.some((tv) => tv !== null) || m.tempMin.some((tv) => tv !== null);
+      }),
+    [data]
+  );
+
   const tempRange = useMemo(() => {
     let min = Infinity;
     let max = -Infinity;
-    for (const model of WEATHER_MODELS) {
+    for (const model of visibleModels) {
       const m = data.models[model.id];
       if (!m) continue;
       for (const tv of m.tempMax) if (tv !== null && tv > max) max = tv;
@@ -85,7 +96,7 @@ export function DailyForecastComparison({ data }: DailyForecastComparisonProps) 
             </tr>
           </thead>
           <tbody>
-            {WEATHER_MODELS.map((model) => {
+            {visibleModels.map((model) => {
               const m = data.models[model.id];
               if (!m) return null;
               return (
