@@ -13,7 +13,8 @@ export interface WeatherConditionGuide {
   severity: 'light' | 'moderate' | 'heavy' | 'extreme';
   color: string;
   cues: string;
-  rate: string;
+  rateMetric: string;
+  rateUs: string;
   impact: string;
 }
 
@@ -25,7 +26,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'light',
     color: '#38bdf8',
     cues: 'Sky completely clear or <10% high cirrus. Strong sharp shadows cast on ground; intense direct solar radiation.',
-    rate: '0 mm rain • Peak UV exposure',
+    rateMetric: '0 mm rain • Peak UV exposure',
+    rateUs: '0 in rain • Peak UV exposure',
     impact: 'Comfortable to hot depending on season. Protect skin/eyes during midday peak solar hours.',
   },
   {
@@ -35,7 +37,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'light',
     color: '#60a5fa',
     cues: 'Sun shines through broken fluffy cumulus covering 25–50% of the sky. Alternating warm sun and cool shadows.',
-    rate: '0 mm rain • Gentle thermal breeze',
+    rateMetric: '0 mm rain • Gentle thermal breeze',
+    rateUs: '0 in rain • Gentle thermal breeze',
     impact: 'Ideal outdoor conditions; pleasant lighting with intermittent direct sun.',
   },
   {
@@ -45,7 +48,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'light',
     color: '#94a3b8',
     cues: 'Sky 100% blanketed by a dull, uniform gray cloud layer. No distinct shadows, muted light, sun disc obscured.',
-    rate: '0 mm rain (or pre-rain humidity build-up)',
+    rateMetric: '0 mm rain (or pre-rain humidity build-up)',
+    rateUs: '0 in rain (or pre-rain humidity build-up)',
     impact: 'Traps heat overnight or prevents daytime solar heating. Often precedes developing rain cells.',
   },
   {
@@ -55,7 +59,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'light',
     color: '#06b6d4',
     cues: 'Extremely fine micro-droplets floating in the air. Dampens pavement without distinct ripples or running water.',
-    rate: '< 1.0 mm/h • Surface dampening',
+    rateMetric: '< 1.0 mm/h • Surface dampening',
+    rateUs: '< 0.04 in/h • Surface dampening',
     impact: 'Windshield wipers on intermittent delay. Walking without an umbrella is tolerable for several minutes.',
   },
   {
@@ -65,7 +70,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'light',
     color: '#22c55e',
     cues: 'Individual drops clearly visible and audible. Small circular ripples form in shallow puddles; pavement glistens.',
-    rate: '1.0 – 2.5 mm/h',
+    rateMetric: '1.0 – 2.5 mm/h',
+    rateUs: '0.04 – 0.10 in/h',
     impact: 'Wipers on continuous low speed. Umbrella needed. No standing water on well-drained roadways.',
   },
   {
@@ -75,7 +81,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'moderate',
     color: '#eab308',
     cues: 'Steady, rhythmic drumming sound. Continuous water flowing along curbs and gutters; spray kicked up behind car tires.',
-    rate: '2.5 – 10.0 mm/h',
+    rateMetric: '2.5 – 10.0 mm/h',
+    rateUs: '0.10 – 0.40 in/h',
     impact: 'Wipers on standard speed. Moderate visibility reduction. Walking quickly gets shoes and clothes soaked.',
   },
   {
@@ -84,8 +91,9 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     emoji: '🌊',
     severity: 'heavy',
     color: '#f97316',
-    cues: 'Loud roaring sound on roofs and cars. Sheets of water sweeping across streets; visibility drops below 1 km.',
-    rate: '10.0 – 25.0 mm/h (Gauges often lose 10-15% to splash-out)',
+    cues: 'Loud roaring sound on roofs and cars. Sheets of water sweeping across streets; visibility drops below 1 km (0.6 mi).',
+    rateMetric: '10.0 – 25.0 mm/h (Gauges often lose 10-15% to splash-out)',
+    rateUs: '0.40 – 1.00 in/h (Gauges often lose 10-15% to splash-out)',
     impact: 'Wipers on maximum high speed. Rapid water accumulation in road dips. Hydroplaning hazard; slow driving.',
   },
   {
@@ -94,8 +102,9 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     emoji: '🚨',
     severity: 'extreme',
     color: '#ef4444',
-    cues: 'Blinding white curtain of water. Rain bouncing 15–20 cm off the pavement. Near-zero visibility; drains overflow.',
-    rate: '> 25.0 – 50+ mm/h (High Flash Flood Risk)',
+    cues: 'Blinding white curtain of water. Rain bouncing 15–20 cm (6–8 in) off the pavement. Near-zero visibility; drains overflow.',
+    rateMetric: '> 25.0 – 50+ mm/h (High Flash Flood Risk)',
+    rateUs: '> 1.00 – 2.00+ in/h (High Flash Flood Risk)',
     impact: 'Flash ponding occurs in minutes. Pull over safely if driving. Standard tipping gauges severely undercount volume.',
   },
   {
@@ -105,7 +114,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'extreme',
     color: '#a855f7',
     cues: 'Towering dark anvil clouds, sudden gust front, temperature plunge, and audible thunder rumbles or lightning bolts.',
-    rate: 'Variable squalls 15–50+ mm/h • Lightning hazard',
+    rateMetric: 'Variable squalls 15–50+ mm/h • Lightning hazard',
+    rateUs: 'Variable squalls 0.6–2.0+ in/h • Lightning hazard',
     impact: '30-30 Safety Rule: If time between flash and thunder is under 30 seconds, immediately take shelter indoors.',
   },
   {
@@ -115,7 +125,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'moderate',
     color: '#14b8a6',
     cues: 'Large tree branches whipping constantly; dust and loose leaves airborne; umbrellas blown inside out.',
-    rate: 'Sustained > 30 km/h or gusts > 45 km/h',
+    rateMetric: 'Sustained > 30 km/h or gusts > 45 km/h',
+    rateUs: 'Sustained > 18 mph or gusts > 28 mph',
     impact: 'Hazardous for two-wheelers/scooters. Watch for loose sheet-metal roofing and falling tree limbs.',
   },
   {
@@ -125,7 +136,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'moderate',
     color: '#f59e0b',
     cues: 'Horizon obscured by brownish/grayish murk; sun appears as an orange/red disc; burning smell or eye irritation.',
-    rate: 'Fine particulate matter suspension (PM2.5/PM10)',
+    rateMetric: 'Fine particulate matter suspension (PM2.5/PM10)',
+    rateUs: 'Fine particulate matter suspension (PM2.5/PM10)',
     impact: 'Sensitive groups limit outdoor exertion. Air purifiers recommended indoors.',
   },
   {
@@ -134,8 +146,9 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     emoji: '🌁',
     severity: 'moderate',
     color: '#64748b',
-    cues: 'Ground-level cloud restricting horizontal visibility to under 1,000 meters. Cool, damp, clammy sensation.',
-    rate: '100% relative humidity • Micro-condensation',
+    cues: 'Ground-level cloud restricting horizontal visibility to under 1,000 m (0.6 mi). Cool, damp, clammy sensation.',
+    rateMetric: '100% relative humidity • Micro-condensation',
+    rateUs: '100% relative humidity • Micro-condensation',
     impact: 'Use low-beam fog lights only. High beams reflect glare directly back into the driver eyes.',
   },
   {
@@ -145,7 +158,8 @@ export const CONDITIONS: WeatherConditionGuide[] = [
     severity: 'heavy',
     color: '#dc2626',
     cues: 'Heat waves shimmering off road asphalt. Stifling, stagnant air; heavy perspiration that struggles to evaporate.',
-    rate: 'Temp > 35°C or Heat Index > 41°C',
+    rateMetric: 'Temp > 35°C or Heat Index > 41°C',
+    rateUs: 'Temp > 95°F or Heat Index > 106°F',
     impact: 'High heat exhaustion risk. Drink water with electrolytes proactively before feeling thirsty.',
   },
 ];
@@ -280,6 +294,11 @@ export function WeatherLogs({
     [selectedCondId]
   );
 
+  const activeRate = useMemo(
+    () => (units === 'us' ? activeCondition.rateUs : activeCondition.rateMetric),
+    [activeCondition, units]
+  );
+
   const refreshStats = useCallback(async () => {
     const stats = await idbGetStats();
     setStorageStats(stats);
@@ -359,7 +378,7 @@ export function WeatherLogs({
       severity: activeCondition.severity,
       severityColor: activeCondition.color,
       temperature: tempInC,
-      rate: activeCondition.rate,
+      rate: activeRate,
       note: note.trim(),
       photoId,
       location_name: location.name,
@@ -372,8 +391,9 @@ export function WeatherLogs({
       localStorage.setItem('weather_logs_safe', JSON.stringify(existing.slice(0, 200)));
 
       try {
+        const displayTemp = units === 'us' ? `${Math.round(cToF(tempInC))}°F` : `${tempInC}°C`;
         await supabase.from('weather_logs').insert({
-          note: `[${newObservation.time}] ${activeCondition.emoji} ${activeCondition.label} (${tempInC}°C) | ${note}`,
+          note: `[${newObservation.time}] ${activeCondition.emoji} ${activeCondition.label} (${displayTemp}) | ${note}`,
           location_name: location.name,
           logged_at: newObservation.logged_at,
         } as any);
@@ -595,7 +615,7 @@ export function WeatherLogs({
           </div>
           <div>{activeCondition.cues}</div>
           <div style={{ marginTop: '4px', color: '#94a3b8' }}>
-            <strong>Expected Rate:</strong> {activeCondition.rate}
+            <strong>Expected Rate ({units === 'us' ? 'Imperial' : 'Metric'}):</strong> {activeRate}
           </div>
         </div>
 
