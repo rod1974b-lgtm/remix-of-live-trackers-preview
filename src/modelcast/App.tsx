@@ -1,7 +1,6 @@
 // @ts-nocheck -- imported Bolt code, written for a looser TS config
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CloudSun, Loader2, AlertTriangle, Globe2, Radar, Layers, ClipboardList, RefreshCw, Share2, Check, Navigation, Download, Upload } from 'lucide-react';
-import { useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { CloudSun, Loader2, AlertTriangle, Globe2, Navigation } from 'lucide-react';
 import { SearchBar } from '@/modelcast/components/SearchBar';
 import { CurrentWeatherCard } from '@/modelcast/components/CurrentWeatherCard';
 import { TopModelForecast } from '@/modelcast/components/TopModelForecast';
@@ -9,6 +8,7 @@ import { WeatherModelsLiveModal } from '@/modelcast/components/WeatherModelsLive
 import { LiveTrackersModal } from '@/modelcast/components/LiveTrackersModal';
 import { WeatherLogs } from '@/modelcast/components/WeatherLogs';
 import { SettingsBar } from '@/modelcast/components/SettingsBar';
+import { HeaderMenu } from '@/modelcast/components/HeaderMenu';
 import { SettingsProvider, useSettings } from '@/modelcast/lib/settings';
 import { DayNightSummary } from '@/modelcast/components/DayNightSummary';
 import type {
@@ -222,7 +222,16 @@ function AppContent() {
           const last = JSON.parse(raw) as GeoLocation;
           handleSelect(last);
         } else {
-          handleSelect({ id: 1150965, name: 'Ratchaburi', latitude: 13.54, longitude: 99.82, country: 'Thailand', admin1: 'Ratchaburi', timezone: 'Asia/Bangkok', country_code: 'TH' } as GeoLocation);
+          handleSelect({
+            id: 1150965,
+            name: 'Ratchaburi',
+            latitude: 13.54,
+            longitude: 99.82,
+            country: 'Thailand',
+            admin1: 'Ratchaburi',
+            timezone: 'Asia/Bangkok',
+            country_code: 'TH',
+          } as GeoLocation);
         }
       }
     } catch {
@@ -294,41 +303,32 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
+      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-lg">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2 flex-wrap">
-            <CloudSun className="text-sky-400" size={28} />
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <CloudSun className="text-sky-400 shrink-0" size={28} />
             <div>
               <h1 className="text-lg font-bold leading-tight text-white">ModelCast</h1>
               <p className="text-xs text-slate-400">{t('appTagline')}</p>
             </div>
           </div>
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+
+          <div className="flex items-center gap-2">
             <SettingsBar />
-            <button
-              onClick={() => void handleShare()}
-              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${shareCopied ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
-              title="Copy a link that keeps your cities and settings"
-            >
-              {shareCopied ? <Check size={16} /> : <Share2 size={16} />}
-              <span>{shareCopied ? 'Link Copied!' : 'Share'}</span>
-            </button>
-            <button
-              onClick={exportBackup}
-              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-500/20 px-3 py-1.5 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-500/30"
-              title="Download a backup of your cities and settings"
-            >
-              <Download size={16} />
-              <span>Backup</span>
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${restoreMsg ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
-              title="Restore from a backup file"
-            >
-              <Upload size={16} />
-              <span>{restoreMsg ?? 'Restore'}</span>
-            </button>
+            <HeaderMenu
+              activeView={activeView}
+              setActiveView={setActiveView}
+              onOpenTrackers={() => setShowTrackers(true)}
+              onOpenModels={() => setShowModels(true)}
+              onRefresh={() => void handleRefresh()}
+              refreshing={refreshing}
+              onShare={() => void handleShare()}
+              shareCopied={shareCopied}
+              onExportBackup={exportBackup}
+              onRestoreClick={() => fileInputRef.current?.click()}
+              hasLocation={!!location}
+            />
             <input
               ref={fileInputRef}
               type="file"
@@ -340,35 +340,6 @@ function AppContent() {
                 e.target.value = '';
               }}
             />
-            <button
-              onClick={() => setActiveView(activeView === 'logs' ? 'forecast' : 'logs')}
-              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${activeView === 'logs' ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
-            >
-              <ClipboardList size={16} />
-              <span>{activeView === 'logs' ? 'Forecast' : 'Logs'}</span>
-            </button>
-            <button
-              onClick={() => void handleRefresh()}
-              disabled={!location || refreshing}
-              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-              <span className="">Refresh</span>
-            </button>
-            <button
-              onClick={() => setShowTrackers(true)}
-              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-red-500/90 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-400"
-            >
-              <Radar size={16} />
-              <span className="">{t('liveTrackers')}</span>
-            </button>
-            <button
-              onClick={() => setShowModels(true)}
-              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-400"
-            >
-              <Layers size={16} />
-              <span className="">{t('weatherModelsLive')}</span>
-            </button>
           </div>
         </div>
       </header>
@@ -428,41 +399,40 @@ function AppContent() {
             <p className="mt-1 text-sm text-slate-500">{t('tryAnother')}</p>
           </div>
         )}
-{location && !loading && !error && current && hourly && daily && activeView === 'forecast' && (
-  <div className="space-y-6">
-    <CurrentWeatherCard
-      weather={current}
-      locationName={location.name}
-      country={location.country}
-    />
-    {lastUpdated && (
-      <p className="-mt-4 text-right text-xs text-slate-400">
-        Last updated {lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Bangkok' })} ICT
-      </p>
-    )}
 
-    {/* Day & Night Weather Report Summary (Sun, Moon, Narrative, Pressure, UV) */}
-    <DayNightSummary
-      location={location}
-      current={current}
-      hourly={hourly}
-      daily={daily}
-    />
+        {location && !loading && !error && current && hourly && daily && activeView === 'forecast' && (
+          <div className="space-y-6">
+            <CurrentWeatherCard
+              weather={current}
+              locationName={location.name}
+              country={location.country}
+            />
+            {lastUpdated && (
+              <p className="-mt-4 text-right text-xs text-slate-400">
+                Last updated {lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Bangkok' })} ICT
+              </p>
+            )}
 
-    <TopModelForecast
-      location={location}
-      model={topModel}
-      current={current}
-      hourly={hourly}
-      daily={daily}
-      votes={localVotes}
-      accuracy={accuracyResults}
-      onOpenModels={() => setShowModels(true)}
-    />
-  </div>
-)}
+            {/* Day & Night Weather Report Summary (Sun, Moon, Narrative, Pressure, UV) */}
+            <DayNightSummary
+              location={location}
+              current={current}
+              hourly={hourly}
+              daily={daily}
+            />
 
-       
+            <TopModelForecast
+              location={location}
+              model={topModel}
+              current={current}
+              hourly={hourly}
+              daily={daily}
+              votes={localVotes}
+              accuracy={accuracyResults}
+              onOpenModels={() => setShowModels(true)}
+            />
+          </div>
+        )}
 
         {location && !loading && !error && current && hourly && daily && activeView === 'logs' && (
           <WeatherLogs
