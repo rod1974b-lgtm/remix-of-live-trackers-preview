@@ -1,8 +1,9 @@
 // @ts-nocheck
 import { useEffect, useState, useMemo } from 'react';
-import { ChevronUp, Loader2 } from 'lucide-react';
+import { ChevronUp } from 'lucide-react';
 import type { CurrentWeather, DailyForecast, GeoLocation, HourlyForecast } from '@/modelcast/lib/types';
 import { useSettings } from '@/modelcast/lib/settings';
+import { cToF, kmhToMph, hpaToInhg, windUnitLabel } from '@/modelcast/lib/units';
 
 interface DayNightSummaryProps {
   location: GeoLocation;
@@ -94,7 +95,6 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
         setAstro(result);
       })
       .catch(() => {
-        // Fallback default for Ratchaburi / Central Thailand
         if (active) {
           setAstro({
             sunrise: '06:08',
@@ -125,17 +125,18 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
   const narrative = useMemo(() => {
     const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long' });
 
-    // Peak temperature
-    let peakTemp = Math.round(current.temperature);
+    // Peak temperature in Celsius from current or daily model forecasts
+    let peakC = current.temperature;
     if (daily) {
       for (const mId in daily.models) {
         const mMax = daily.models[mId]?.tempMax?.[0];
         if (typeof mMax === 'number') {
-          peakTemp = Math.max(peakTemp, Math.round(mMax));
+          peakC = Math.max(peakC, mMax);
           break;
         }
       }
     }
+    const peakTemp = units === 'us' ? Math.round(cToF(peakC)) : Math.round(peakC);
     const tempUnit = units === 'us' ? '°F' : '°C';
 
     // Rain probability
@@ -180,12 +181,20 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
         : `With UV-Index around ${uvVal}, standard daylight conditions apply.`;
 
     const windDir = astro ? getCardinalDirection(astro.windDirectionDominant) : 'South';
-    const dayWindSpeed = astro?.windSpeedMax ?? 12;
-    const gusts = astro?.windGustsMax ?? 30;
+    const dayWindSpeedKmh = astro?.windSpeedMax ?? 12;
+    const gustsKmh = astro?.windGustsMax ?? 30;
 
-    const overnightWindDesc = 'light air is noticeable (1 to 7 km/h)';
-    const dayWindDesc = `${getBeaufortDescriptor(dayWindSpeed)} (7 to ${dayWindSpeed} km/h)`;
-    const gustSentence = gusts >= 25 ? `Gusts to ${gusts} km/h are possible.` : '';
+    const speedUnit = windUnitLabel(units);
+    const overnightMin = units === 'us' ? Math.round(kmhToMph(1)) : 1;
+    const overnightMax = units === 'us' ? Math.round(kmhToMph(7)) : 7;
+    const overnightWindDesc = `light air is noticeable (${overnightMin} to ${overnightMax} ${speedUnit})`;
+
+    const dayWindSpeedVal = units === 'us' ? Math.round(kmhToMph(dayWindSpeedKmh)) : dayWindSpeedKmh;
+    const dayWindMinVal = units === 'us' ? Math.round(kmhToMph(7)) : 7;
+    const dayWindDesc = `${getBeaufortDescriptor(dayWindSpeedKmh)} (${dayWindMinVal} to ${dayWindSpeedVal} ${speedUnit})`;
+
+    const gustVal = units === 'us' ? Math.round(kmhToMph(gustsKmh)) : gustsKmh;
+    const gustSentence = gustsKmh >= 25 ? `Gusts to ${gustVal} ${speedUnit} are possible.` : '';
 
     return `${timingSentence} ${cloudSentence} ${sunSentence} ${rainSentence} Temperatures peaking at ${peakTemp} ${tempUnit}. ${uvSentence} Overnight into ${dayOfWeek} ${overnightWindDesc}. During the day blows ${dayWindDesc}. ${gustSentence} Winds blowing from ${windDir}. The weather forecast for ${location.name} for ${dayOfWeek} can be accurate in parts but deviations are expected. Check again for latest updates.`;
   }, [location.name, current.temperature, daily, hourly, astro, units]);
@@ -218,7 +227,6 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
           {/* Sun & UV Card */}
           <div className="flex items-center gap-3">
             <div className="relative flex h-14 w-14 shrink-0 flex-col items-center justify-between overflow-hidden rounded-xl border border-amber-500/40 bg-gradient-to-b from-amber-400 via-orange-500 to-red-600 p-1 shadow-md">
-              {/* Sun Horizon Graphic */}
               <div className="mt-1 flex justify-center">
                 <svg viewBox="0 0 36 20" className="h-5 w-10">
                   <circle cx="18" cy="18" r="12" fill="#fef08a" />
@@ -226,14 +234,12 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
                 </svg>
               </div>
 
-              {/* UV Badge */}
               <div className="flex items-center gap-1 rounded bg-slate-950/85 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
                 UV {astro?.uvIndexMax ?? 8}
               </div>
             </div>
 
-            {/* Sunrise / Sunset */}
             <div className="space-y-0.5 font-mono text-xs sm:text-sm font-semibold text-slate-200">
               <div className="flex items-center gap-1.5">
                 <span className="text-amber-400">▲</span>
@@ -249,7 +255,6 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
           {/* Moon Card */}
           <div className="flex items-center gap-3">
             <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-indigo-700/40 bg-gradient-to-b from-indigo-950 via-slate-900 to-indigo-900 shadow-md">
-              {/* Illustrated Cratered Moon Disc */}
               <svg viewBox="0 0 40 40" className="h-9 w-9">
                 <defs>
                   <radialGradient id="moonDiscGrad" cx="35%" cy="35%" r="65%">
@@ -267,7 +272,6 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
               </svg>
             </div>
 
-            {/* Moonrise / Moonset */}
             <div className="space-y-0.5 font-mono text-xs sm:text-sm font-semibold text-slate-200">
               <div className="flex items-center gap-1.5">
                 <span className="text-indigo-300">▲</span>
@@ -284,7 +288,11 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
           <div className="space-y-1 text-xs sm:text-sm text-slate-300">
             <div>
               <span className="font-medium text-slate-400">Pressure: </span>
-              <span className="font-semibold text-slate-100">{Math.round(current.pressure)} hPa</span>
+              <span className="font-semibold text-slate-100">
+                {units === 'us'
+                  ? `${hpaToInhg(current.pressure).toFixed(2)} inHg`
+                  : `${Math.round(current.pressure)} hPa`}
+              </span>
             </div>
             <div>
               <span className="font-medium text-slate-400">Timezone: </span>
@@ -305,4 +313,3 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
     </div>
   );
 }
-
