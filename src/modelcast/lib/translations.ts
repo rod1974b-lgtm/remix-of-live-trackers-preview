@@ -1,7 +1,9 @@
-export type Language = 'en' | 'es' | 'fr' | 'de' | 'ja' | 'zh';
+export const LANGUAGES: { code: Language; label: string; flag: string }[] = [
+ export type Language = 'en' | 'es' | 'fr' | 'de' | 'ja' | 'zh' | 'th';
 
 export const LANGUAGES: { code: Language; label: string; flag: string }[] = [
   { code: 'en', label: 'English', flag: 'EN' },
+  { code: 'th', label: 'ไทย', flag: 'TH' },
   { code: 'es', label: 'Español', flag: 'ES' },
   { code: 'fr', label: 'Français', flag: 'FR' },
   { code: 'de', label: 'Deutsch', flag: 'DE' },
