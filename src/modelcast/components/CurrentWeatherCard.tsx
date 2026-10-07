@@ -48,8 +48,10 @@ function WeatherIcon({ code, size = 64, className }: { code: number; size?: numb
   return <Icon size={size} className={className} />;
 }
 
-// Plain-English meteorological explanations for weather codes
-function getWeatherCodeExplanation(code: number): { title: string; cues: string; advice: string } {
+// Plain-English meteorological explanations for weather codes, dynamically scaled to active units
+function getWeatherCodeExplanation(code: number, units: 'metric' | 'us' = 'metric'): { title: string; cues: string; advice: string } {
+  const isUs = units === 'us';
+
   if (code === 0 || code === 1) {
     return {
       title: 'Clear / Mainly Clear Sky',
@@ -74,7 +76,7 @@ function getWeatherCodeExplanation(code: number): { title: string; cues: string;
   if (code === 45 || code === 48) {
     return {
       title: 'Fog / Mist',
-      cues: 'Suspended water droplets close to the ground cutting visibility to under 1 km.',
+      cues: `Suspended water droplets close to the ground cutting visibility to under ${isUs ? '0.6 miles' : '1 km'}.`,
       advice: 'Use low-beam headlights or fog lamps. Watch for damp, slick roads.',
     };
   }
@@ -82,29 +84,29 @@ function getWeatherCodeExplanation(code: number): { title: string; cues: string;
     return {
       title: 'Drizzle (Misty Rain)',
       cues: 'Very fine, light droplets that float in the air. Dampens pavement without pooling.',
-      advice: 'Rain rate is under 1 mm/h. Intermittent wipers are sufficient; no heavy puddles.',
+      advice: `Rain rate is under ${isUs ? '0.04 in/h' : '1 mm/h'}. Intermittent wipers are sufficient; no heavy puddles.`,
     };
   }
   if (code === 61 || code === 80) {
     return {
       title: 'Light Rain / Light Showers',
       cues: 'Individual drops clearly felt and seen. Puddles form very slowly on the pavement.',
-      advice: 'Rain rate is ~1 to 2.5 mm/h. Intermittent wipers; roads become slick with oil residue.',
+      advice: `Rain rate is ~${isUs ? '0.04 to 0.10 in/h' : '1 to 2.5 mm/h'}. Intermittent wipers; roads become slick with oil residue.`,
     };
   }
   if (code === 63 || code === 81) {
     return {
       title: 'Moderate Rain',
       cues: 'Steady, continuous downpour. Small puddles form quickly, hum of rain is loud on roofs.',
-      advice: 'Rain rate is 2.5 to 10 mm/h. Normal wipers on continuous speed; shoes will get soaked.',
+      advice: `Rain rate is ${isUs ? '0.10 to 0.40 in/h' : '2.5 to 10 mm/h'}. Normal wipers on continuous speed; shoes will get soaked.`,
     };
   }
   if (code === 65 || code === 82 || code === 67) {
     return {
       title: 'Heavy / Torrential Rain',
-      cues: 'Rain cascades in thick sheets. Visibility drops below 1 km; curbs and gutters overflow.',
+      cues: `Rain cascades in thick sheets. Visibility drops below ${isUs ? '0.6 miles' : '1 km'}; curbs and gutters overflow.`,
       advice:
-        'Rain rate exceeds 15–25 mm/h. Tipping rain gauges frequently undercount downpours due to splash-out and wind. High risk of flash flooding on low-lying roads within 15 minutes.',
+        `Rain rate exceeds ${isUs ? '0.60–1.00 in/h' : '15–25 mm/h'}. Tipping rain gauges frequently undercount downpours due to splash-out and wind. High risk of flash flooding on low-lying roads within 15 minutes.`,
     };
   }
   if (code >= 95) {
@@ -142,7 +144,7 @@ export function CurrentWeatherCard({ weather, locationName, country }: CurrentWe
 
   // Click handler for condition and temperature
   const handleConditionClick = () => {
-    const details = getWeatherCodeExplanation(weather.weatherCode);
+    const details = getWeatherCodeExplanation(weather.weatherCode, units);
     setExplanation({
       title: `${info.label} (${formatTempWithUnit(weather.temperature, units)})`,
       cues: details.cues,
@@ -176,16 +178,20 @@ export function CurrentWeatherCard({ weather, locationName, country }: CurrentWe
 
   const handleWindClick = () => {
     const speed = weather.windSpeed;
+    const isUs = units === 'us';
+    const strongThreshold = isUs ? 18.6 : 30;
+    const modThreshold = isUs ? 9.3 : 15;
+
     setExplanation({
       title: `Wind: ${formatWind(speed, units, 1)}`,
       cues:
-        speed > 30
+        speed > strongThreshold
           ? 'Strong breeze / squalls. Tree branches sway continuously, dust and loose paper fly.'
-          : speed > 15
+          : speed > modThreshold
             ? 'Moderate breeze. Leaves and small twigs in constant motion, flags extended.'
             : 'Light breeze. Barely felt on your face; smoke drifts gently with the air.',
       advice:
-        speed > 30
+        speed > strongThreshold
           ? 'Umbrellas are difficult to control and may flip. Motorcyclists should beware of sudden side gusts.'
           : 'Safe and comfortable wind conditions.',
     });
@@ -193,27 +199,35 @@ export function CurrentWeatherCard({ weather, locationName, country }: CurrentWe
 
   const handlePressureClick = () => {
     const p = weather.pressure;
+    const isUs = units === 'us';
+    const lowBoundary = isUs ? '29.77 inHg' : '1008 hPa';
+    const highBoundary = isUs ? '29.94 inHg' : '1014 hPa';
+
     setExplanation({
       title: `Barometric Pressure: ${formatPressure(p, units)}`,
       cues: 'Atmospheric pressure is the physical weight of the column of air pressing down on the ground.',
       advice:
         p < 1008
-          ? 'Low pressure system. Rising air often pulls in moisture, clouds, squalls, and tropical storms.'
+          ? `Low pressure system (< ${lowBoundary}). Rising air often pulls in moisture, clouds, squalls, and tropical storms.`
           : p > 1014
-            ? 'High pressure system. Sinking air suppresses storm development, leading to stable, calmer skies.'
-            : 'Normal sea-level pressure range.',
+            ? `High pressure system (> ${highBoundary}). Sinking air suppresses storm development, leading to stable, calmer skies.`
+            : `Normal sea-level pressure range (${lowBoundary} – ${highBoundary}).`,
     });
   };
 
   const handlePrecipClick = () => {
     const precip = weather.precipitation;
+    const isUs = units === 'us';
+    const heavyThreshold = isUs ? '0.6 in/h' : '15 mm/h';
+    const modThreshold = isUs ? '0.08 in/h' : '2 mm/h';
+
     setExplanation({
       title: `Precipitation: ${formatPrecip(precip, units, 1)}`,
       cues:
         precip > 15
-          ? 'Heavy to extreme rain. Fast sheet runoff on roads, large spray behind tires.'
+          ? `Heavy to extreme rain (> ${heavyThreshold}). Fast sheet runoff on roads, large spray behind tires.`
           : precip > 2
-            ? 'Moderate rain. Continuous puddles and wet streets.'
+            ? `Moderate rain (> ${modThreshold}). Continuous puddles and wet streets.`
             : precip > 0
               ? 'Light rain or drizzle. Wet pavement with minimal road pooling.'
               : 'Zero measurable rain currently at this station.',
