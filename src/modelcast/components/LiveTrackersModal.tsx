@@ -12,6 +12,16 @@ async function fetchLightningStrikes(bbox?: [number, number, number, number]) {
 }
 import { fetchPrecipitationNearby, fetchTropicalStorms, haversineKm } from '@/modelcast/lib/liveTrackers';
 import type { TropicalStorm } from '@/modelcast/lib/liveTrackers';
+import { useSettings } from '@/modelcast/lib/settings';
+import { cToF, kmhToMph, mmToInches, hpaToInhg } from '@/modelcast/lib/units';
+import type { UnitSystem } from '@/modelcast/lib/units';
+
+const uP = (mm: number, u: UnitSystem) => (u === 'us' ? mmToInches(mm).toFixed(2) : mm.toFixed(1));
+const uPL = (u: UnitSystem) => (u === 'us' ? 'in' : 'mm');
+const uW = (kmh: number, u: UnitSystem) => Math.round(u === 'us' ? kmhToMph(kmh) : kmh);
+const uWL = (u: UnitSystem) => (u === 'us' ? 'mph' : 'km/h');
+const uT = (c: number, u: UnitSystem) => `${Math.round(u === 'us' ? cToF(c) : c)}${u === 'us' ? '°F' : '°C'}`;
+const uD = (km: number, u: UnitSystem) => `${Math.round(u === 'us' ? km * 0.621371 : km).toLocaleString()} ${u === 'us' ? 'mi' : 'km'}`;
 import { X, Satellite, Wind, Zap, ExternalLink, Loader2, AlertTriangle, Clock, CheckCircle2, Info } from 'lucide-react';
 
 type TabId = 'precip' | 'warnings' | 'satellite' | 'earthquake' | 'hurricane' | 'lightning';
@@ -70,6 +80,7 @@ function severityColor(severity: string): { bg: string; border: string; text: st
 }
 
 function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | null; onSelectTab?: (tab: 'precipitation' | 'lightning') => void }) {
+  const { units } = useSettings();
   const [alerts, setAlerts] = useState<WeatherAlertData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -377,7 +388,7 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
               {river && river.today > 10 ? `${Math.round(river.today).toLocaleString()} m³/s` : 'Normal Flow'}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5 flex items-center justify-between">
-              <span>{river && river.surgePct > 10 ? `+${Math.round(river.surgePct)}% surge` : '3-Day rain < 25mm'}</span>
+              <span>{river && river.surgePct > 10 ? `+${Math.round(river.surgePct)}% surge` : `3-Day rain < ${units === 'us' ? '1 in' : '25 mm'}`}</span>
               <span className="text-[10px] text-sky-400 font-bold">{showHydroDrawer ? '▲ Hide' : '▼ Hydro'}</span>
             </div>
           </button>
@@ -391,7 +402,7 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
               </span>
             </div>
             <div className="text-base font-extrabold text-white mt-1">
-              {atmo ? `${atmo.windGusts}–${atmo.maxGustsToday} km/h` : '15–25 km/h'}
+              {atmo ? `${uW(atmo.windGusts, units)}–${uW(atmo.maxGustsToday, units)} ${uWL(units)}` : `${uW(15, units)}–${uW(25, units)} ${uWL(units)}`}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
               {(atmo?.maxGustsToday ?? 0) >= 35 ? 'Hold loose objects' : 'Breeze • safe'}
@@ -407,10 +418,10 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
               </span>
             </div>
             <div className="text-base font-extrabold text-amber-300 mt-1">
-              Feels {atmo?.feelsLike ?? 37}°C
+              Feels {uT(atmo?.feelsLike ?? 37, units)}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              {atmo ? `${atmo.temp}°C • ${atmo.humidity}% RH` : 'Stay hydrated'}
+              {atmo ? `${uT(atmo.temp, units)} • ${atmo.humidity}% RH` : 'Stay hydrated'}
             </div>
           </div>
         </div>
@@ -644,6 +655,7 @@ function localDateKey(d: Date): string {
 }
 
 function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
+  const { units } = useSettings();
   const lat = location?.latitude ?? 13.9642;
   const lon = location?.longitude ?? 99.9445;
   const locName = location?.name ?? 'this area';
@@ -764,7 +776,7 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
   if (currentPrecip > 0.1) {
     heroBadge = `${precipLevel(currentPrecip)} Rain Now`;
     heroBadgeColor = currentPrecip > 7.5 ? 'bg-purple-500/20 text-purple-200 border-purple-500/50' : 'bg-sky-500/20 text-sky-200 border-sky-500/50';
-    heroHeadline = `Currently raining at ${currentPrecip.toFixed(1)} mm/h (${currentProb}% chance)`;
+    heroHeadline = `Currently raining at ${uP(currentPrecip, units)} ${uPL(units)}/h (${currentProb}% chance)`;
     heroSubline = nextRain ? `Showers continuing through ${fmtICT(new Date(nextRain.time))} ICT` : 'Showers tapering off soon';
   } else if (nextRain) {
     const mins = Math.max(0, Math.round((new Date(nextRain.time).getTime() - Date.now()) / 60000));
@@ -773,7 +785,7 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
     heroBadge = nextRain.precip > 7.5 ? 'Heavy Downpour Expected' : 'Showers Coming';
     heroBadgeColor = nextRain.precip > 7.5 ? 'bg-amber-500/20 text-amber-200 border-amber-500/50' : 'bg-sky-500/20 text-sky-200 border-sky-500/50';
     heroHeadline = `Rain begins in ${hoursAway > 0 ? `${hoursAway}h ` : ''}${minsAway}m around ${fmtICT(new Date(nextRain.time))} ICT`;
-    heroSubline = `Expected rate: ${nextRain.precip.toFixed(1)} mm/h (${nextRain.prob}% probability)`;
+    heroSubline = `Expected rate: ${uP(nextRain.precip, units)} ${uPL(units)}/h (${nextRain.prob}% probability)`;
   }
 
   // Chart geometry with large, uncompressed sizing
@@ -835,7 +847,7 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
             {peakHour && peakHour.precip > 0.1 && (
               <div className="shrink-0 bg-slate-900/60 rounded-xl px-3.5 py-2 border border-slate-700/60 text-right">
                 <span className="text-[11px] uppercase tracking-wider text-amber-300 font-bold block">3-Day Peak</span>
-                <span className="text-lg font-black text-amber-400">{peakHour.precip.toFixed(1)} mm</span>
+                <span className="text-lg font-black text-amber-400">{uP(peakHour.precip, units)} {uPL(units)}</span>
                 <span className="text-xs text-slate-300 block">{fmtICT(new Date(peakHour.time))} ICT</span>
               </div>
             )}
@@ -846,8 +858,8 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
             <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-3.5 shadow-sm">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Right Now</div>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl font-black text-sky-300">{currentPrecip.toFixed(1)}</span>
-                <span className="text-sm font-semibold text-slate-300">mm/h</span>
+                <span className="text-3xl font-black text-sky-300">{uP(currentPrecip, units)}</span>
+                <span className="text-sm font-semibold text-slate-300">{uPL(units)}/h</span>
               </div>
               <div className="text-xs font-semibold text-slate-400 mt-1">{currentProb}% rain probability</div>
             </div>
@@ -857,8 +869,8 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
               {nextRain ? (
                 <>
                   <div className="mt-1 flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-sky-300">{nextRain.precip.toFixed(1)}</span>
-                    <span className="text-sm font-semibold text-slate-300">mm/h &bull; {nextRain.prob}%</span>
+                    <span className="text-3xl font-black text-sky-300">{uP(nextRain.precip, units)}</span>
+                    <span className="text-sm font-semibold text-slate-300">{uPL(units)}/h &bull; {nextRain.prob}%</span>
                   </div>
                   <div className="text-xs font-semibold text-amber-300 mt-1">
                     {fmtICT(new Date(nextRain.time))} ICT ({Math.round((new Date(nextRain.time).getTime() - Date.now()) / 3600000)}h away)
@@ -875,8 +887,8 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
             <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-3.5 shadow-sm">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-400">3-Day Total</div>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl font-black text-sky-300">{totalForecast.toFixed(1)}</span>
-                <span className="text-sm font-semibold text-slate-300">mm total</span>
+                <span className="text-3xl font-black text-sky-300">{uP(totalForecast, units)}</span>
+                <span className="text-sm font-semibold text-slate-300">{uPL(units)} total</span>
               </div>
               <div className="text-xs font-semibold text-slate-400 mt-1">
                 {totalForecast > 100 ? '⚠️ High flood risk' : 'Normal conditions'}
@@ -901,7 +913,7 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
                   }`}
                 >
                   <div className="text-xs font-bold text-slate-400">{['Today', 'Tomorrow', 'Day 3'][i]}</div>
-                  <div className="text-base sm:text-lg font-black text-sky-300 mt-0.5">{sum.toFixed(1)} mm</div>
+                  <div className="text-base sm:text-lg font-black text-sky-300 mt-0.5">{uP(sum, units)} {uPL(units)}</div>
                 </button>
               );
             })}
@@ -953,7 +965,7 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-base font-black text-sky-300">
-                  {inspectedHour.precip.toFixed(1)} mm ({precipLevel(inspectedHour.precip)})
+                  {uP(inspectedHour.precip, units)} {uPL(units)} ({precipLevel(inspectedHour.precip)})
                 </span>
                 <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-xs font-bold border border-sky-500/30">
                   {inspectedHour.prob}% probability
@@ -994,7 +1006,7 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
                     );
                   })}
                   <text x={18} y={padT + plotH / 2} textAnchor="middle" transform={`rotate(-90 18 ${padT + plotH / 2})`} className="fill-slate-400 font-bold" style={{ fontSize: 13 }}>
-                    mm
+                    {uPL(units)}
                   </text>
 
                   {/* Hourly Columns */}
@@ -1098,7 +1110,7 @@ function PrecipitationTracker({ location }: { location: GeoLocation | null }) {
 
                       <div className="text-right">
                         <div className={`text-lg sm:text-xl font-black ${hasRain ? 'text-sky-300' : 'text-slate-500'}`}>
-                          {h.precip.toFixed(1)} mm
+                          {uP(h.precip, units)} {uPL(units)}
                         </div>
                         <div className="text-xs font-bold uppercase tracking-wider text-slate-400">
                           {precipLevel(h.precip)}
@@ -2593,6 +2605,7 @@ function StormCard({
   storm: TropicalStorm & { distanceKm: number; bearing: string; speedKmh: number };
   locName: string;
 }) {
+  const { units } = useSettings();
   const badge = getStormCategoryBadge(storm.category, storm.intensityKts);
   const isClose = storm.distanceKm <= 2000;
 
@@ -2627,7 +2640,7 @@ function StormCard({
         <div className="sm:text-right bg-slate-900/60 sm:bg-transparent p-2.5 sm:p-0 rounded-xl border border-slate-700/40 sm:border-0 flex sm:flex-col justify-between items-center sm:items-end">
           <div>
             <div className="text-2xl sm:text-3xl font-black text-white leading-tight">
-              {storm.speedKmh} <span className="text-sm font-semibold text-sky-400">km/h</span>
+              {uW(storm.speedKmh, units)} <span className="text-sm font-semibold text-sky-400">{uWL(units)}</span>
             </div>
             <div className="text-[11px] text-slate-400 font-medium">
               {storm.intensityKts} knots &bull; {storm.intensityMph} mph
@@ -2641,7 +2654,7 @@ function StormCard({
         <div className="rounded-xl bg-slate-900/80 border border-slate-700/80 p-2.5">
           <span className="text-[10px] uppercase font-bold text-slate-400 block">Distance from {locName}</span>
           <span className={`text-sm font-extrabold ${isClose ? 'text-amber-300' : 'text-white'}`}>
-            {Math.round(storm.distanceKm).toLocaleString()} km
+            {uD(storm.distanceKm, units)}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">{storm.bearing}</span>
         </div>
@@ -2649,7 +2662,7 @@ function StormCard({
         <div className="rounded-xl bg-slate-900/80 border border-slate-700/80 p-2.5">
           <span className="text-[10px] uppercase font-bold text-slate-400 block">Central Pressure</span>
           <span className="text-sm font-extrabold text-white">
-            {storm.pressureMb > 0 ? `${storm.pressureMb} hPa` : 'Unknown'}
+            {storm.pressureMb > 0 ? (units === 'us' ? `${hpaToInhg(storm.pressureMb).toFixed(2)} inHg` : `${storm.pressureMb} hPa`) : 'Unknown'}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">
             {storm.pressureMb > 0 && storm.pressureMb < 960 ? 'Deep Low (Intense)' : 'Barometric MSLP'}
@@ -2662,7 +2675,7 @@ function StormCard({
             {storm.movement ? storm.movement : 'Stationary'}
           </span>
           <span className="text-[11px] text-slate-400 block mt-0.5">
-            {storm.speedMph > 0 ? `Speed: ${Math.round(storm.speedMph * 1.60934)} km/h` : 'Slow drift'}
+            {storm.speedMph > 0 ? `Speed: ${units === 'us' ? Math.round(storm.speedMph) : Math.round(storm.speedMph * 1.60934)} ${uWL(units)}` : 'Slow drift'}
           </span>
         </div>
       </div>
