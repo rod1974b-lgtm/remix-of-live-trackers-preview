@@ -120,25 +120,64 @@ export function useFavorites() {
     }
   }, []);
 
-  const exportBackup = useCallback(() => {
-    const payload = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      favorites,
-      settings: {
-        units: localStorage.getItem('modelcast:units') ?? 'metric',
-        language: localStorage.getItem('modelcast:language') ?? 'en',
-        lastLocation: localStorage.getItem('modelcast:last-location'),
-        logs: localStorage.getItem('modelcast:logs'),
-      },
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `modelcast-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportBackup = useCallback(async () => {
+    try {
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        favorites,
+        settings: {
+          units: localStorage.getItem('modelcast:units') ?? 'metric',
+          language: localStorage.getItem('modelcast:language') ?? 'en',
+          lastLocation: localStorage.getItem('modelcast:last-location'),
+          logs: localStorage.getItem('modelcast:logs'),
+        },
+      };
+      const jsonStr = JSON.stringify(payload, null, 2);
+      const fileName = `modelcast-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+      // 1. Native mobile share sheet (iOS "Save to Files" / Android share sheet)
+      try {
+        const file = new File([jsonStr], fileName, { type: 'application/json' });
+        if (
+          typeof navigator !== 'undefined' &&
+          typeof navigator.canShare === 'function' &&
+          navigator.canShare({ files: [file] })
+        ) {
+          await navigator.share({
+            files: [file],
+            title: 'ModelCast Backup',
+            text: 'Backup of your ModelCast favorite cities and settings',
+          });
+          return true;
+        }
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === 'AbortError') {
+          return false;
+        }
+      }
+
+      // 2. Browser file download fallback (desktop and browsers without file share)
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      }, 2500);
+      return true;
+    } catch {
+      return false;
+    }
   }, [favorites]);
 
   const restoreBackup = useCallback((jsonContent: string) => {
