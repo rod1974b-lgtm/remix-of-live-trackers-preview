@@ -47,6 +47,9 @@ export function HourlyChart({ data }: HourlyChartProps) {
       if (metric === 'windSpeed' && units === 'us') {
         points = points.map((v) => (v === null ? null : v * 0.621371));
       }
+      if (metric === 'precipitation' && units === 'us') {
+        points = points.map((v) => (v === null ? null : v * 0.0393701));
+      }
       values.push({
         modelId: model.id,
         color: model.color,
@@ -137,7 +140,7 @@ export function HourlyChart({ data }: HourlyChartProps) {
                 className="fill-slate-500"
                 style={{ fontSize: 11 }}
               >
-                {round(tv, metric === 'precipitation' ? 1 : 0)}
+                {round(tv, metric === 'precipitation' ? (units === 'us' ? 2 : 1) : 0)}
               </text>
             </g>
           ))}
