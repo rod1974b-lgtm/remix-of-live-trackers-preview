@@ -11,6 +11,7 @@ import { SettingsBar } from '@/modelcast/components/SettingsBar';
 import { HeaderMenu } from '@/modelcast/components/HeaderMenu';
 import { SettingsProvider, useSettings } from '@/modelcast/lib/settings';
 import { DayNightSummary } from '@/modelcast/components/DayNightSummary';
+import { WeatherTickers } from '@/modelcast/components/WeatherTickers';
 import type {
   CurrentWeather,
   DailyForecast,
@@ -88,229 +89,245 @@ function AppContent() {
   const [refreshing, setRefreshing] = useState(false);
   const {
     favorites,
+    isFavorite,
     addFavorite,
     removeFavorite,
-    isFavorite,
-    copyShareLink,
     exportBackup,
-    restoreBackup,
+    importBackup,
+    shareUrl,
   } = useFavorites();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [restored, setRestored] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
-  const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const loadWeather = useCallback(async (loc: GeoLocation, force = false) => {
-    if (!force) setLoading(true);
-    setError(null);
-    try {
-      const [cur, hr, dl] = await Promise.all([
-        fetchCurrentWeather(loc.latitude, loc.longitude, force),
-        fetchHourlyForecast(loc.latitude, loc.longitude, force),
-        fetchDailyForecast(loc.latitude, loc.longitude, force),
-      ]);
-      setLastUpdated(new Date());
-      setCurrent(cur);
-      setHourly(hr);
-      setDaily(dl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load weather data');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
-  const loadAccuracy = useCallback(async (loc: GeoLocation) => {
-    try {
-      const data = await testModelAccuracy(loc.latitude, loc.longitude);
-      setAccuracyResults(data);
-    } catch {
-      setAccuracyResults([]);
+  // Restore last selected location on initial load (URL wins, then localStorage, then default)
+  useEffect(() => {
+    const fromUrl = getLocationFromUrl();
+    if (fromUrl) {
+      setLocation(fromUrl);
+      setRestored(true);
+      return;
     }
+    try {
+      const saved = localStorage.getItem(LAST_LOCATION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as GeoLocation;
+        if (parsed && typeof parsed.latitude === 'number') {
+          setLocation(parsed);
+          syncLocationToUrl(parsed);
+          setRestored(true);
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    // Default fallback to Ratchaburi
+    const defaultLoc: GeoLocation = {
+      id: 1150965,
+      name: 'Ratchaburi',
+      latitude: 13.54,
+      longitude: 99.82,
+      country: 'Thailand',
+      country_code: 'TH',
+      timezone: 'Asia/Bangkok',
+    };
+    setLocation(defaultLoc);
+    syncLocationToUrl(defaultLoc);
+    setRestored(true);
   }, []);
 
   const loadLocalVotes = useCallback(async (loc: GeoLocation) => {
     try {
-      const { data, error } = await supabase
-        .rpc('get_local_vote_aggregates', {
-          lat: loc.latitude,
-          lon: loc.longitude,
-          radius: 0.5,
-        });
-      if (error) throw error;
-      setLocalVotes((data ?? []) as VoteAggregate[]);
-    } catch {
-      setLocalVotes([]);
+      const { data } = await supabase
+        .from('model_votes')
+        .select('model_id, rating')
+        .gte('latitude', loc.latitude - 0.5)
+        .lte('latitude', loc.latitude + 0.5)
+        .gte('longitude', loc.longitude - 0.5)
+        .lte('longitude', loc.longitude + 0.5);
+
+      if (!data) return;
+
+      const grouped = data.reduce((acc, row) => {
+        if (!acc[row.model_id]) {
+          acc[row.model_id] = { total: 0, count: 0 };
+        }
+        acc[row.model_id].total += row.rating;
+        acc[row.model_id].count += 1;
+        return acc;
+      }, {} as Record<string, { total: number; count: number }>);
+
+      const aggs: VoteAggregate[] = Object.entries(grouped).map(([model_id, val]) => ({
+        model_id,
+        average_rating: val.total / val.count,
+        vote_count: val.count,
+      }));
+
+      setLocalVotes(aggs);
+    } catch (e) {
+      console.error('Failed to load local votes:', e);
     }
   }, []);
 
   const loadGlobalVotes = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .rpc('get_global_vote_aggregates');
-      if (error) throw error;
-      setGlobalVotes((data ?? []) as VoteAggregate[]);
-    } catch {
-      setGlobalVotes([]);
+      const { data } = await supabase
+        .from('model_votes')
+        .select('model_id, rating');
+
+      if (!data) return;
+
+      const grouped = data.reduce((acc, row) => {
+        if (!acc[row.model_id]) {
+          acc[row.model_id] = { total: 0, count: 0 };
+        }
+        acc[row.model_id].total += row.rating;
+        acc[row.model_id].count += 1;
+        return acc;
+      }, {} as Record<string, { total: number; count: number }>);
+
+      const aggs: VoteAggregate[] = Object.entries(grouped).map(([model_id, val]) => ({
+        model_id,
+        average_rating: val.total / val.count,
+        vote_count: val.count,
+      }));
+
+      setGlobalVotes(aggs);
+    } catch (e) {
+      console.error('Failed to load global votes:', e);
+    }
+  }, []);
+
+  const loadWeatherData = useCallback(async (loc: GeoLocation) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [cur, hr, dy] = await Promise.all([
+        fetchCurrentWeather(loc.latitude, loc.longitude, loc.timezone),
+        fetchHourlyForecast(loc.latitude, loc.longitude, loc.timezone),
+        fetchDailyForecast(loc.latitude, loc.longitude, loc.timezone),
+      ]);
+      setCurrent(cur);
+      setHourly(hr);
+      setDaily(dy);
+      setLastUpdated(new Date());
+
+      // Test accuracy across models in parallel with weather load
+      testModelAccuracy(loc.latitude, loc.longitude, loc.timezone)
+        .then((acc) => setAccuracyResults(acc))
+        .catch((err) => console.error('Accuracy test failed:', err));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch weather data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   const handleSelect = useCallback(
     (loc: GeoLocation) => {
       setLocation(loc);
-      loadWeather(loc);
-      loadLocalVotes(loc);
-      loadAccuracy(loc);
-      setTimeout(() => syncLocationToUrl(loc), 0);
       try {
         localStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(loc));
       } catch {
         // ignore
       }
+      syncLocationToUrl(loc);
+      loadWeatherData(loc);
+      loadLocalVotes(loc);
     },
-    [loadWeather, loadLocalVotes, loadAccuracy],
+    [loadWeatherData, loadLocalVotes]
   );
 
-  const handleShare = useCallback(async () => {
-    const ok = await copyShareLink();
-    if (ok) {
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
-    }
-  }, [copyShareLink]);
-
   const handleLocateMe = useCallback(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser');
+      return;
+    }
+    setLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        handleSelect({
-          id: Math.round(Math.abs(pos.coords.latitude * 1000 + pos.coords.longitude * 10)),
-          name: 'My Location',
-          latitude: Number(pos.coords.latitude.toFixed(4)),
-          longitude: Number(pos.coords.longitude.toFixed(4)),
-          country: '',
-          timezone: 'auto',
-        } as GeoLocation);
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        try {
+          const res = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&count=1`
+          );
+          const data = await res.json();
+          const place = data?.results?.[0];
+          const newLoc: GeoLocation = {
+            id: place?.id ?? Math.round(Math.abs(lat * 1000 + lon * 10)),
+            name: place?.name ?? 'My Location',
+            latitude: lat,
+            longitude: lon,
+            country: place?.country ?? '',
+            country_code: place?.country_code ?? '',
+            timezone: place?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'auto',
+          };
+          handleSelect(newLoc);
+        } catch {
+          const fallbackLoc: GeoLocation = {
+            id: Math.round(Math.abs(lat * 1000 + lon * 10)),
+            name: 'My Location',
+            latitude: lat,
+            longitude: lon,
+            country: '',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'auto',
+          };
+          handleSelect(fallbackLoc);
+        }
       },
-      () => setError('Could not get your location. Please allow location access.'),
+      (err) => {
+        setLoading(false);
+        alert(`Could not get your location: ${err.message}`);
+      },
+      { timeout: 10000 }
     );
   }, [handleSelect]);
 
-  const handleImportFile = useCallback(
-    async (file: File) => {
-      const text = await file.text();
-      const ok = restoreBackup(text);
-      setRestoreMsg(ok ? 'Backup restored!' : 'Invalid backup file.');
-      setTimeout(() => setRestoreMsg(null), 2500);
-    },
-    [restoreBackup],
-  );
-
   useEffect(() => {
-    loadGlobalVotes();
-  }, [loadGlobalVotes]);
-
-  useEffect(() => {
-    try {
-      const fromUrl = getLocationFromUrl();
-      if (fromUrl) {
-        handleSelect(fromUrl);
-      } else {
-        const raw = localStorage.getItem(LAST_LOCATION_KEY);
-        if (raw) {
-          const last = JSON.parse(raw) as GeoLocation;
-          handleSelect(last);
-        } else {
-          handleSelect({
-            id: 1150965,
-            name: 'Ratchaburi',
-            latitude: 13.54,
-            longitude: 99.82,
-            country: 'Thailand',
-            admin1: 'Ratchaburi',
-            timezone: 'Asia/Bangkok',
-            country_code: 'TH',
-          } as GeoLocation);
-        }
-      }
-    } catch {
-      // ignore
-    } finally {
-      setRestored(true);
+    if (location && restored) {
+      loadWeatherData(location);
+      loadLocalVotes(location);
+      loadGlobalVotes();
     }
-  }, [handleSelect]);
-
-  // Auto-refresh live weather every 10 minutes while the app is open
-  useEffect(() => {
-    if (!location) return;
-    const id = setInterval(() => {
-      loadWeather(location, true);
-      loadAccuracy(location);
-    }, 10 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [location, loadWeather, loadAccuracy]);
-
-  const handleRefresh = useCallback(async () => {
-    if (!location) return;
-    setRefreshing(true);
-    await Promise.all([
-      loadWeather(location, true),
-      loadLocalVotes(location),
-      loadGlobalVotes(),
-      loadAccuracy(location),
-    ]);
-    setRefreshing(false);
-  }, [location, loadWeather, loadLocalVotes, loadGlobalVotes, loadAccuracy]);
+  }, [location, restored, loadWeatherData, loadLocalVotes, loadGlobalVotes]);
 
   const topModel: WeatherModel = useMemo(() => {
-    const scores = new Map<string, number>();
-
-    for (const model of WEATHER_MODELS) {
-      let combined = 0;
-      let hasVote = false;
-      let hasAccuracy = false;
-
-      const localVote = localVotes.find((v) => v.model_id === model.id);
-      const globalVote = globalVotes.find((v) => v.model_id === model.id);
-      const accuracy = accuracyResults.find((a) => a.modelId === model.id && a.hasData);
-
-      if (localVote && localVote.avg_rating > 0) {
-        combined += (localVote.avg_rating / 5) * 50;
-        hasVote = true;
-      } else if (globalVote && globalVote.avg_rating > 0) {
-        combined += (globalVote.avg_rating / 5) * 30;
-        hasVote = true;
-      }
-
-      if (accuracy && accuracy.overallScore > 0) {
-        combined += (accuracy.overallScore / 100) * 50;
-        hasAccuracy = true;
-      }
-
-      if (hasVote || hasAccuracy) {
-        scores.set(model.id, combined);
-      }
-    }
-
-    const sorted = [...scores.entries()].sort((a, b) => b[1] - a[1]);
-    if (sorted.length > 0) {
-      const found = WEATHER_MODELS.find((m) => m.id === sorted[0][0]);
+    if (accuracyResults.length > 0) {
+      const sorted = [...accuracyResults].sort((a, b) => b.overallScore - a.overallScore);
+      const topAcc = sorted[0];
+      const found = WEATHER_MODELS.find((m) => m.id === topAcc.modelId);
       if (found) return found;
     }
     return WEATHER_MODELS[0];
-  }, [localVotes, globalVotes, accuracyResults]);
+  }, [accuracyResults]);
+
+  const handleRefresh = useCallback(() => {
+    if (location) {
+      setRefreshing(true);
+      loadWeatherData(location);
+      loadLocalVotes(location);
+      loadGlobalVotes();
+    }
+  }, [location, loadWeatherData, loadLocalVotes, loadGlobalVotes]);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-lg">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2">
-            <CloudSun className="text-sky-400 shrink-0" size={28} />
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 shadow-lg shadow-sky-500/20">
+              <CloudSun size={24} className="text-white" />
+            </div>
             <div>
-              <h1 className="text-lg font-bold leading-tight text-white">ModelCast</h1>
-              <p className="text-xs text-slate-400">{t('appTagline')}</p>
+              <h1 className="text-lg font-bold leading-none text-white sm:text-xl">
+                {t('appName')}
+              </h1>
+              <p className="hidden text-xs text-slate-400 sm:block">
+                {t('tagline')}
+              </p>
             </div>
           </div>
 
@@ -318,25 +335,23 @@ function AppContent() {
             <SettingsBar />
             <HeaderMenu
               activeView={activeView}
-              setActiveView={setActiveView}
+              onToggleView={() => setActiveView((v) => (v === 'forecast' ? 'logs' : 'forecast'))}
               onOpenTrackers={() => setShowTrackers(true)}
               onOpenModels={() => setShowModels(true)}
-              onRefresh={() => void handleRefresh()}
+              onRefresh={handleRefresh}
               refreshing={refreshing}
-              onShare={() => void handleShare()}
-              shareCopied={shareCopied}
-              onExportBackup={exportBackup}
-              onRestoreClick={() => fileInputRef.current?.click()}
-              hasLocation={!!location}
+              onShare={shareUrl}
+              onBackup={exportBackup}
+              onRestore={() => fileInputRef.current?.click()}
             />
             <input
               ref={fileInputRef}
               type="file"
-              accept="application/json,.json"
+              accept=".json"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) void handleImportFile(file);
+                if (file) importBackup(file);
                 e.target.value = '';
               }}
             />
@@ -345,7 +360,7 @@ function AppContent() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <section className="mb-8 text-center">
+        <section className="mb-6 text-center">
           <h2 className="text-2xl font-bold text-white sm:text-3xl">
             {t('findBest')}
           </h2>
@@ -363,6 +378,8 @@ function AppContent() {
               <span className="hidden sm:inline">Locate Me</span>
             </button>
           </div>
+
+          {/* SAVED FAVORITES ROW */}
           {(favorites.length > 0 || (location && !isFavorite(location.id))) && (
             <div className="mt-4 flex justify-center">
               <FavoritePlaces
@@ -374,6 +391,15 @@ function AppContent() {
                 onSelect={handleSelect}
               />
             </div>
+          )}
+
+          {/* DUAL TICKERS: Severe Alerts / Threat Center + What To Wear */}
+          {location && (
+            <WeatherTickers
+              location={location}
+              current={current}
+              onOpenTrackers={() => setShowTrackers(true)}
+            />
           )}
         </section>
 
