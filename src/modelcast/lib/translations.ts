@@ -1,4 +1,4 @@
-export type Language = 'en' | 'es' | 'fr' | 'de' | 'ja' | 'zh' | 'th';
+export type Language = 'en' | 'th' | 'es' | 'fr' | 'de' | 'ja' | 'zh';
 
 export const LANGUAGES: { code: Language; label: string; flag: string }[] = [
   { code: 'en', label: 'English', flag: 'EN' },
