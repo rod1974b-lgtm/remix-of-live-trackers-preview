@@ -1,5 +1,4 @@
-// @ts-nocheck - photo picker with auto-compress for WeatherLogs
-// Compresses to max 1000px JPEG ~45-75KB for fast loading and low storage
+// @ts-nocheck - photo picker with auto-compress & built-in AI Sky Analysis
 import { useRef, useState } from 'react';
 
 function compressImage(file: File, maxDim = 1000, quality = 0.70): Promise<string> {
@@ -33,16 +32,33 @@ function compressImage(file: File, maxDim = 1000, quality = 0.70): Promise<strin
   });
 }
 
+export interface AnalysisResult {
+  explanation: string;
+  conditionId: string;
+  confidence: number;
+}
+
 interface ImagePickerProps {
   value?: string;
   onChange?: (dataUrl: string | undefined) => void;
   label?: string;
   onPreview?: (dataUrl: string) => void;
+  locationName?: string;
+  onAnalyzed?: (result: AnalysisResult) => void;
 }
 
-export default function ObservationImagePicker({ value, onChange, label = '📷 + Photo', onPreview }: ImagePickerProps) {
+export default function ObservationImagePicker({
+  value,
+  onChange,
+  label = '📷 + Photo',
+  onPreview,
+  locationName,
+  onAnalyzed,
+}: ImagePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [err, setErr] = useState('');
 
   const pick = async (f: File | undefined) => {
@@ -53,6 +69,7 @@ export default function ObservationImagePicker({ value, onChange, label = '📷 
     }
     setBusy(true);
     setErr('');
+    setAnalysis(null);
     try {
       const dataUrl = await compressImage(f, 1000, 0.70);
       onChange?.(dataUrl);
@@ -62,50 +79,157 @@ export default function ObservationImagePicker({ value, onChange, label = '📷 
     setBusy(false);
   };
 
+  const handleAnalyze = async () => {
+    if (!value || analyzing) return;
+    setAnalyzing(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/public/analyze-weather-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: value, locationName }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Analysis failed');
+      }
+      const result: AnalysisResult = {
+        explanation: data.explanation,
+        conditionId: data.conditionId,
+        confidence: data.confidence ?? 80,
+      };
+      setAnalysis(result);
+      onAnalyzed?.(result);
+    } catch (e: any) {
+      setErr(e?.message || 'Could not analyze photo');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   if (value) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-        <span style={{ position: 'relative', display: 'inline-block' }}>
-          <img
-            src={value}
-            alt="Preview"
-            onClick={() => onPreview?.(value)}
-            title="Click to view full image"
-            style={{ height: '36px', width: '36px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #38bdf8', cursor: 'pointer' }}
-          />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ position: 'relative', display: 'inline-block' }}>
+            <img
+              src={value}
+              alt="Weather observation"
+              onClick={() => onPreview?.(value)}
+              title="Click to view full image"
+              style={{
+                height: '42px',
+                width: '42px',
+                objectFit: 'cover',
+                borderRadius: '8px',
+                border: '1px solid #38bdf8',
+                cursor: 'pointer',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                onChange?.(undefined);
+                setAnalysis(null);
+              }}
+              title="Remove photo"
+              style={{
+                position: 'absolute',
+                top: '-7px',
+                right: '-7px',
+                height: '18px',
+                width: '18px',
+                borderRadius: '50%',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                fontSize: '10px',
+                cursor: 'pointer',
+                lineHeight: '18px',
+                textAlign: 'center',
+                fontWeight: 'bold',
+              }}
+            >
+              ✕
+            </button>
+          </span>
+
           <button
             type="button"
-            onClick={() => onChange?.(undefined)}
-            title="Remove photo"
+            onClick={handleAnalyze}
+            disabled={analyzing}
             style={{
-              position: 'absolute',
-              top: '-7px',
-              right: '-7px',
-              height: '18px',
-              width: '18px',
-              borderRadius: '50%',
-              background: '#ef4444',
-              color: 'white',
-              border: 'none',
-              fontSize: '10px',
-              cursor: 'pointer',
-              lineHeight: '18px',
-              textAlign: 'center',
-              fontWeight: 'bold',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              background: analyzing ? '#1e293b' : 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+              border: '1px solid #38bdf8',
+              color: '#ffffff',
+              fontSize: '11px',
+              fontWeight: '600',
+              cursor: analyzing ? 'wait' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
-            ✕
+            {analyzing ? '⏳ Analyzing Sky...' : '✨ Explain with AI'}
           </button>
-        </span>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          style={{ padding: '5px 8px', borderRadius: '6px', background: '#0f172a', border: '1px solid #475569', color: '#cbd5e1', fontSize: '11px', cursor: 'pointer' }}
-        >
-          Change
-        </button>
-        <input ref={inputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
-      </span>
+
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            style={{
+              padding: '5px 8px',
+              borderRadius: '6px',
+              background: '#0f172a',
+              border: '1px solid #475569',
+              color: '#cbd5e1',
+              fontSize: '11px',
+              cursor: 'pointer',
+            }}
+          >
+            Change
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              pick(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </div>
+
+        {/* AI Explanation Card */}
+        {analysis && (
+          <div
+            style={{
+              padding: '8px 10px',
+              borderRadius: '8px',
+              background: 'rgba(2, 132, 199, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              fontSize: '11px',
+              color: '#e2e8f0',
+              lineHeight: '1.4',
+            }}
+          >
+            <div style={{ fontWeight: '600', color: '#38bdf8', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span>🤖 AI Sky Analysis</span>
+              <span style={{ fontSize: '10px', color: '#94a3b8' }}>({analysis.confidence}% confidence)</span>
+            </div>
+            <div>{analysis.explanation}</div>
+          </div>
+        )}
+
+        {err && (
+          <div style={{ fontSize: '11px', color: '#f87171' }}>
+            {err}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -119,18 +243,27 @@ export default function ObservationImagePicker({ value, onChange, label = '📷 
         style={{
           padding: '6px 10px',
           borderRadius: '6px',
-          background: 'transparent',
-          border: '1px dashed #64748b',
+          background: '#0f172a',
+          border: '1px dashed #475569',
           color: '#cbd5e1',
-          fontSize: '11px',
+          fontSize: '12px',
           cursor: busy ? 'wait' : 'pointer',
-          opacity: busy ? 0.6 : 1,
         }}
       >
-        {busy ? '⏳ Compressing...' : label}
+        {busy ? 'Compressing...' : label}
       </button>
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
-      {err && <span style={{ color: '#f87171', fontSize: '10px' }}>{err}</span>}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          pick(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      {err && <span style={{ fontSize: '11px', color: '#f87171' }}>{err}</span>}
     </span>
   );
 }
