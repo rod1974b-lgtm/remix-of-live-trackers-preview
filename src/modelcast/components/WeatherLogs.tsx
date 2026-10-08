@@ -1,8 +1,8 @@
-// @ts-nocheck -- WeatherLogs: Pure Timeline Observations with Ground-Truth Explanations & IndexedDB Photos
+// @ts-nocheck -- WeatherLogs: Pure Timeline Observations with Ground-Truth Explanations, IndexedDB Photos & AI Sky Vision
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/modelcast/lib/supabase';
 import type { GeoLocation, CurrentWeather } from '@/modelcast/lib/types';
-import ObservationImagePicker from '@/modelcast/components/ObservationImagePicker';
+import ObservationImagePicker, { type AnalysisResult } from '@/modelcast/components/ObservationImagePicker';
 import { useSettings } from '@/modelcast/lib/settings';
 import { cToF, fToC, tempUnitLabel } from '@/modelcast/lib/units';
 
@@ -277,6 +277,7 @@ export function WeatherLogs({
   const [temperature, setTemperature] = useState<number>(getInitialTemp);
   const [note, setNote] = useState<string>('');
   const [photo, setPhoto] = useState<string | undefined>(undefined);
+  const [aiDetails, setAiDetails] = useState<AnalysisResult | null>(null);
   const [logs, setLogs] = useState<any[]>([]);
   const [msg, setMsg] = useState<string>('');
   const [photoCache, setPhotoCache] = useState<Record<string, string>>({});
@@ -335,6 +336,23 @@ export function WeatherLogs({
     refreshStats();
   }, []);
 
+  // Callback when AI analyzes the photo
+  const handleAiAnalyzed = (res: AnalysisResult) => {
+    setAiDetails(res);
+    if (res.conditionId && CONDITIONS.some((c) => c.id === res.conditionId)) {
+      setSelectedCondId(res.conditionId);
+    }
+    // Pre-fill note if blank, or append cleanly
+    if (!note.trim()) {
+      setNote(res.explanation);
+    } else if (!note.includes(res.explanation)) {
+      setNote((prev) => `${prev.trim()} • [AI Sky: ${res.explanation}]`);
+    }
+    const matched = CONDITIONS.find((c) => c.id === res.conditionId);
+    setMsg(`✨ AI Sky Analysis complete: ${matched?.label || res.conditionId} (${res.confidence}% match)`);
+    setTimeout(() => setMsg(''), 4500);
+  };
+
   // Quick fill from live station, respecting active unit
   const handleQuickFill = () => {
     if (current) {
@@ -383,6 +401,8 @@ export function WeatherLogs({
       photoId,
       location_name: location.name,
       logged_at: new Date().toISOString(),
+      aiExplanation: aiDetails?.explanation || undefined,
+      aiConfidence: aiDetails?.confidence || undefined,
     };
 
     try {
@@ -401,6 +421,7 @@ export function WeatherLogs({
 
       setNote('');
       setPhoto(undefined);
+      setAiDetails(null);
       setObsTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }));
       loadLogs();
       await refreshStats();
@@ -675,9 +696,14 @@ export function WeatherLogs({
             </label>
             <ObservationImagePicker
               value={photo}
-              onChange={setPhoto}
+              onChange={(img) => {
+                setPhoto(img);
+                if (!img) setAiDetails(null);
+              }}
               label="📷 Snap / Upload"
               onPreview={(img) => setLightboxImg(img)}
+              locationName={location.name}
+              onAnalyzed={handleAiAnalyzed}
             />
           </div>
         </div>
@@ -785,7 +811,7 @@ export function WeatherLogs({
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '18px' }}>{log.emoji || condMatch?.emoji || '🌤️'}</span>
                       <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffffff' }}>
                         {log.conditionLabel || condMatch?.label || log.condition}
@@ -809,6 +835,21 @@ export function WeatherLogs({
                       >
                         {log.severity || condMatch?.severity || 'obs'}
                       </span>
+                      {log.aiConfidence && (
+                        <span
+                          style={{
+                            fontSize: '9px',
+                            padding: '2px 6px',
+                            borderRadius: '10px',
+                            background: 'rgba(56, 189, 248, 0.15)',
+                            border: '1px solid rgba(56, 189, 248, 0.4)',
+                            color: '#38bdf8',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          🤖 AI {log.aiConfidence}%
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
