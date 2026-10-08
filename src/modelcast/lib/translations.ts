@@ -1,5 +1,4 @@
-export const LANGUAGES: { code: Language; label: string; flag: string }[] = [
- export type Language = 'en' | 'es' | 'fr' | 'de' | 'ja' | 'zh' | 'th';
+export type Language = 'en' | 'es' | 'fr' | 'de' | 'ja' | 'zh' | 'th';
 
 export const LANGUAGES: { code: Language; label: string; flag: string }[] = [
   { code: 'en', label: 'English', flag: 'EN' },
