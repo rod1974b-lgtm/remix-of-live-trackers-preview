@@ -18,7 +18,7 @@ const SettingsContext =
 
 const LANG_KEY = 'modelcast:language';
 const UNITS_KEY = 'modelcast:units';
-const VALID_LANGS = ['en', 'es', 'fr', 'de', 'ja', 'zh'];
+const VALID_LANGS = ['en', 'th', 'es', 'fr', 'de', 'ja', 'zh'];
 
 function updateUrlParam(key: string, value: string) {
   if (typeof window === 'undefined') return;
