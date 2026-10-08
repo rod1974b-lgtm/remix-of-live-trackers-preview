@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState, useMemo } from 'react';
-import { ChevronUp } from 'lucide-react';
+import { ChevronUp, Sunrise, Sun, Sunset, Moon, CloudSun, ShieldAlert } from 'lucide-react';
 import type { CurrentWeather, DailyForecast, GeoLocation, HourlyForecast } from '@/modelcast/lib/types';
 import { useSettings } from '@/modelcast/lib/settings';
 import { cToF, kmhToMph, hpaToInhg, windUnitLabel } from '@/modelcast/lib/units';
@@ -49,6 +49,17 @@ function getBeaufortDescriptor(kmh: number): string {
   if (kmh <= 38) return 'a fresh breeze';
   if (kmh <= 49) return 'a strong breeze';
   return 'high winds';
+}
+
+function getMoonPhaseName(phase: number): string {
+  if (phase === 0 || phase === 1) return 'New Moon';
+  if (phase < 0.25) return 'Waxing Crescent';
+  if (phase === 0.25) return 'First Quarter';
+  if (phase < 0.5) return 'Waxing Gibbous';
+  if (phase === 0.5) return 'Full Moon';
+  if (phase < 0.75) return 'Waning Gibbous';
+  if (phase === 0.75) return 'Last Quarter';
+  return 'Waning Crescent';
 }
 
 export function DayNightSummary({ location, current, hourly, daily }: DayNightSummaryProps) {
@@ -121,11 +132,11 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
     };
   }, [location.latitude, location.longitude]);
 
-  // Generate the natural meteorological text paragraph
+  // Generate the natural meteorological text in strict chronological order
   const narrative = useMemo(() => {
     const dayOfWeek = new Date().toLocaleDateString('en-US', { weekday: 'long' });
 
-    // Peak temperature in Celsius from current or daily model forecasts
+    // Peak temperature
     let peakC = current.temperature;
     if (daily) {
       for (const mId in daily.models) {
@@ -139,7 +150,7 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
     const peakTemp = units === 'us' ? Math.round(cToF(peakC)) : Math.round(peakC);
     const tempUnit = units === 'us' ? '°F' : '°C';
 
-    // Rain probability
+    // Rain probability calculation
     let maxRainProb = 80;
     if (hourly?.precipitationProbability?.length) {
       const next24h = hourly.precipitationProbability.slice(0, 24).filter((p): p is number => typeof p === 'number');
@@ -148,58 +159,78 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
       }
     }
 
-    // Weather condition descriptor
-    let timingSentence = 'The night and the afternoon there is a chance of thunderstorms and local showers.';
-    let cloudSentence = 'Early in the day a few clouds are expected.';
-    let sunSentence = 'The sun will not be visible.';
+    const sunriseTime = astro?.sunrise ?? '06:08';
+    const sunsetTime = astro?.sunset ?? '18:13';
+    const moonriseTime = astro?.moonrise ?? '20:03';
+    const moonPhaseText = getMoonPhaseName(astro?.moonPhase ?? 0.5);
 
+    // Morning descriptors
+    let morningSkies = 'Early in the day a few clouds are expected with comfortable, calm morning air.';
     if (maxRainProb < 20) {
-      timingSentence = 'Dry weather is expected throughout the day and night with pleasant conditions.';
-      cloudSentence = 'Clear to partly cloudy skies will prevail early in the morning.';
-      sunSentence = 'Expect plenty of sunshine throughout the day.';
+      morningSkies = 'The morning begins under clear to partly cloudy skies with pleasant, dry conditions.';
     } else if (maxRainProb < 50) {
-      timingSentence = 'Scattered showers may develop during the afternoon with clearer skies overnight.';
-      cloudSentence = 'A mix of sun and clouds is expected early in the day.';
-      sunSentence = 'Sunny intervals are likely between passing cloud banks.';
+      morningSkies = 'Early hours see a mix of morning sun and passing clouds.';
     }
 
-    const rainSentence =
-      maxRainProb >= 70
-        ? `Precipitation is very likely with an ${maxRainProb}% chance.`
-        : maxRainProb >= 40
-        ? `Precipitation is likely with a ${maxRainProb}% chance.`
-        : maxRainProb >= 20
-        ? `A moderate chance of rain (${maxRainProb}%) remains possible.`
-        : `Precipitation is unlikely with low rain probability (${maxRainProb}%).`;
-
+    // Midday descriptors
     const uvVal = astro?.uvIndexMax ?? 8;
     const uvSentence =
       uvVal >= 8
-        ? `With UV-Index rising to ${uvVal}, sun protection is strongly recommended.`
+        ? `By midday, the UV-Index climbs rapidly to ${uvVal}, making sun protection strongly recommended during peak daylight.`
         : uvVal >= 6
-        ? `With UV-Index reaching ${uvVal}, sun protection is recommended around midday.`
-        : `With UV-Index around ${uvVal}, standard daylight conditions apply.`;
+        ? `Around midday, the UV-Index reaches ${uvVal}, so sun protection is recommended.`
+        : `Midday brings gentle daylight with a moderate UV-Index around ${uvVal}.`;
 
+    // Afternoon descriptors
     const windDir = astro ? getCardinalDirection(astro.windDirectionDominant) : 'South';
     const dayWindSpeedKmh = astro?.windSpeedMax ?? 12;
     const gustsKmh = astro?.windGustsMax ?? 30;
-
     const speedUnit = windUnitLabel(units);
-    const overnightMin = units === 'us' ? Math.round(kmhToMph(1)) : 1;
-    const overnightMax = units === 'us' ? Math.round(kmhToMph(7)) : 7;
-    const overnightWindDesc = `light air is noticeable (${overnightMin} to ${overnightMax} ${speedUnit})`;
-
     const dayWindSpeedVal = units === 'us' ? Math.round(kmhToMph(dayWindSpeedKmh)) : dayWindSpeedKmh;
     const dayWindMinVal = units === 'us' ? Math.round(kmhToMph(7)) : 7;
     const dayWindDesc = `${getBeaufortDescriptor(dayWindSpeedKmh)} (${dayWindMinVal} to ${dayWindSpeedVal} ${speedUnit})`;
-
     const gustVal = units === 'us' ? Math.round(kmhToMph(gustsKmh)) : gustsKmh;
-    const gustSentence = gustsKmh >= 25 ? `Gusts to ${gustVal} ${speedUnit} are possible.` : '';
+    const gustSentence = gustsKmh >= 25 ? `Gusts up to ${gustVal} ${speedUnit} are possible.` : '';
 
-    return `${timingSentence} ${cloudSentence} ${sunSentence} ${rainSentence} Temperatures peaking at ${peakTemp} ${tempUnit}. ${uvSentence} Overnight into ${dayOfWeek} ${overnightWindDesc}. During the day blows ${dayWindDesc}. ${gustSentence} Winds blowing from ${windDir}. The weather forecast for ${location.name} for ${dayOfWeek} can be accurate in parts but deviations are expected. Check again for latest updates.`;
+    let afternoonWeather = '';
+    if (maxRainProb >= 70) {
+      afternoonWeather = `During the afternoon, temperatures peak at ${peakTemp} ${tempUnit} with a high chance of convective showers and thunderstorms (${maxRainProb}% precipitation likelihood).`;
+    } else if (maxRainProb >= 40) {
+      afternoonWeather = `In the afternoon, temperatures climb to ${peakTemp} ${tempUnit} alongside scattered passing showers (${maxRainProb}% chance).`;
+    } else {
+      afternoonWeather = `In the afternoon, temperatures peak at ${peakTemp} ${tempUnit} with dry, warm conditions and plenty of sunshine.`;
+    }
+
+    const afternoonWind = `Daytime breezes blow from the ${windDir} at ${dayWindDesc}. ${gustSentence}`.trim();
+
+    // Evening & Sunset descriptors
+    const eveningSentence = `As dusk approaches, the sun sets at ${sunsetTime}, easing daytime heat into a cooler, calmer evening.`;
+
+    // Night & Overnight descriptors
+    const overnightMin = units === 'us' ? Math.round(kmhToMph(1)) : 1;
+    const overnightMax = units === 'us' ? Math.round(kmhToMph(7)) : 7;
+    const overnightWindDesc = `light air (${overnightMin} to ${overnightMax} ${speedUnit})`;
+
+    let nightSentence = `Into the night, the moon rises at ${moonriseTime} (${moonPhaseText}) with ${overnightWindDesc} Noticeable.`;
+    if (maxRainProb >= 70) {
+      nightSentence += ' Isolated nocturnal rain or rumbles of thunder may persist into the late night hours.';
+    } else {
+      nightSentence += ' Skies remain largely settled with quiet overnight conditions.';
+    }
+
+    // Chronological order: Morning ➔ Midday ➔ Afternoon ➔ Sunset/Evening ➔ Night
+    return [
+      `At dawn, the sun rises at ${sunriseTime}. ${morningSkies}`,
+      uvSentence,
+      afternoonWeather,
+      afternoonWind,
+      eveningSentence,
+      nightSentence,
+      `The forecast for ${location.name} for ${dayOfWeek} can be accurate in parts, but local convective deviations remain possible. Check again for latest radar updates.`,
+    ].filter(Boolean).join(' ');
   }, [location.name, current.temperature, daily, hourly, astro, units]);
 
-  // Formatted Timezone text: GMT+07 (UTC +07:00h)
+  // Formatted Timezone text
   const timezoneText = useMemo(() => {
     if (!astro) return 'GMT+07 (UTC +07:00h)';
     const offsetH = Math.round(astro.utcOffsetSeconds / 3600);
@@ -212,12 +243,56 @@ export function DayNightSummary({ location, current, hourly, daily }: DayNightSu
   return (
     <div className="relative overflow-hidden rounded-3xl border border-slate-700/60 bg-slate-900/90 p-5 sm:p-7 shadow-xl backdrop-blur-sm">
       {/* Header */}
-      <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white">
-        Weather report for {location.name}
-      </h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-lg sm:text-xl font-bold tracking-tight text-white">
+          Weather report for {location.name}
+        </h3>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-sky-400 bg-sky-950/60 px-2.5 py-1 rounded-lg border border-sky-800/40">
+          Chronological Day Forecast
+        </span>
+      </div>
 
-      {/* Narrative Paragraph */}
-      <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-300">
+      {/* Visual Chronological Timeline Ribbons */}
+      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        {/* 1. Morning */}
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-950/25 p-2.5">
+          <Sunrise size={18} className="text-amber-400 shrink-0" />
+          <div>
+            <div className="font-bold text-amber-200 uppercase tracking-wide text-[10px]">1. Morning</div>
+            <div className="font-semibold text-slate-100">{astro?.sunrise ?? '06:08'} Sunrise</div>
+          </div>
+        </div>
+
+        {/* 2. Midday */}
+        <div className="flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-950/25 p-2.5">
+          <Sun size={18} className="text-orange-400 shrink-0" />
+          <div>
+            <div className="font-bold text-orange-200 uppercase tracking-wide text-[10px]">2. Midday</div>
+            <div className="font-semibold text-slate-100">UV Peak {astro?.uvIndexMax ?? 8}</div>
+          </div>
+        </div>
+
+        {/* 3. Afternoon */}
+        <div className="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-950/25 p-2.5">
+          <CloudSun size={18} className="text-sky-400 shrink-0" />
+          <div>
+            <div className="font-bold text-sky-200 uppercase tracking-wide text-[10px]">3. Afternoon</div>
+            <div className="font-semibold text-slate-100">Peak Heat & Breezes</div>
+          </div>
+        </div>
+
+        {/* 4. Night */}
+        <div className="flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-950/25 p-2.5">
+          <Moon size={18} className="text-indigo-400 shrink-0" />
+          <div>
+            <div className="font-bold text-indigo-200 uppercase tracking-wide text-[10px]">4. Night</div>
+            <div className="font-semibold text-slate-100">{astro?.moonrise ?? '20:03'} Moonrise</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Narrative Paragraph (Strictly Chronological) */}
+      <p className="mt-4 text-sm sm:text-base leading-relaxed text-slate-300">
         {narrative}
       </p>
 
