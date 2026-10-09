@@ -86,8 +86,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             items.push({
               id: 'glofas-flood',
               type: 'warning',
-              title: '🌊 River Basin Flood Surge Watch',
-              detail: `GloFAS Copernicus hydro-model telemetry indicates high discharge volume (${Math.round(todayFlow)} m³/s).`,
+              title: '🌊 River Flood Surge Watch',
+              detail: `GloFAS Copernicus hydro-model: high discharge (${Math.round(todayFlow)} m³/s).`,
               source: 'GloFAS Copernicus',
             });
           }
@@ -103,16 +103,16 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             items.push({
               id: 'atmo-thunder',
               type: 'warning',
-              title: '⚡ Severe Thunderstorm & Lightning Hazard',
-              detail: 'Active convective cells detected. Seek shelter and avoid open water or elevated terrain.',
-              source: 'Live Radar & Atmo Scan',
+              title: '⚡ Severe Thunderstorm Hazard',
+              detail: 'Active convective cells detected. Seek indoor shelter.',
+              source: 'Live Doppler',
             });
           } else if (isHeavyRain) {
             items.push({
               id: 'atmo-rain',
               type: 'watch',
-              title: '🌧️ Heavy Torrential Rainfall Watch',
-              detail: 'Intense precipitation rate may cause localized street flooding and reduced visibility.',
+              title: '🌧️ Heavy Rainfall Watch',
+              detail: 'Intense rain rate: risk of localized street flooding.',
               source: 'Live Doppler',
             });
           }
@@ -121,9 +121,9 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             items.push({
               id: 'atmo-gale',
               type: 'advisory',
-              title: '💨 High Wind & Gale Advisory',
-              detail: `Sustained winds exceeding ${Math.round(convertWind(current.windSpeed))} ${windUnit}. Secure loose outdoor objects.`,
-              source: 'Surface Anemometer',
+              title: '💨 High Gale Advisory',
+              detail: `Sustained winds exceeding ${Math.round(convertWind(current.windSpeed))} ${windUnit}. Secure loose objects.`,
+              source: 'Surface Sensors',
             });
           }
 
@@ -131,8 +131,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             items.push({
               id: 'atmo-heat',
               type: 'advisory',
-              title: '🌡️ Extreme Heat & Sunstroke Advisory',
-              detail: `Ambient temperature at ${Math.round(convertTemp(current.temperature))}°${tempUnit}. Limit direct sun exposure and stay hydrated.`,
+              title: '🌡️ Extreme Heat Advisory',
+              detail: `Ambient temp ${Math.round(convertTemp(current.temperature))}°${tempUnit}. Limit direct sun exposure.`,
               source: 'Thermal Sensors',
             });
           }
@@ -170,41 +170,41 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
 
     // Base outfit
     if (isHot) {
-      tips.push('☀️ Lightweight breathable cotton or linen fabrics, short sleeves, and loose shorts or skirt');
-      tips.push('🕶️ Polarized sunglasses, wide-brim sun hat, and broad-spectrum SPF 50+ sunscreen');
+      tips.push('☀️ Breathable cotton or linen fabrics, short sleeves, and loose shorts');
+      tips.push('🕶️ Sunglasses, sun hat, and SPF 50+ sunscreen');
     } else if (isPleasant) {
-      tips.push('🌤️ Classic T-shirt with comfortable denim, chinos, or shorts');
-      tips.push('🕶️ Light sunglasses and comfortable walking shoes or sneakers');
+      tips.push('🌤️ Comfortable T-shirt with denim, chinos, or shorts');
+      tips.push('🕶️ Light sunglasses and walking sneakers');
     } else if (isMild) {
-      tips.push('⛅ Long-sleeve shirt or light knit sweater; carry a lightweight cardigan or denim jacket');
-      tips.push('👖 Full-length trousers or comfortable jeans');
+      tips.push('⛅ Long-sleeve shirt or light knit sweater; carry a light jacket');
+      tips.push('👖 Full trousers or comfortable jeans');
     } else if (isChilly) {
-      tips.push('🧥 Medium-weight jacket, fleece, or layered sweater with thermal innerwear');
-      tips.push('🧣 Light scarf and closed warm shoes or ankle boots');
+      tips.push('🧥 Medium-weight jacket, fleece, or layered sweater');
+      tips.push('🧣 Light scarf and closed warm shoes');
     } else if (isCold) {
-      tips.push('❄️ Heavy insulated coat or winter parka with thermal base layer');
-      tips.push('🧤 Warm wool beanie, fleece-lined gloves, thick socks, and insulated footwear');
+      tips.push('❄️ Insulated coat or winter parka with thermal base layer');
+      tips.push('🧤 Warm beanie, gloves, and winter boots');
     }
 
     // Rain / Precipitation Gear
     if (isRain) {
-      tips.push('☂️ Pack a sturdy compact umbrella and water-resistant hooded jacket or rain poncho');
-      tips.push('👟 Non-slip, waterproof shoes or boots to prevent slipping on wet pavements');
+      tips.push('☂️ Sturdy compact umbrella and water-resistant hooded jacket');
+      tips.push('👟 Non-slip, waterproof footwear');
     }
 
     // Snow
     if (isSnow) {
-      tips.push('🥾 Waterproof snow boots with aggressive tread; water-repellent outer shell');
+      tips.push('🥾 Waterproof snow boots with tread; water-repellent outer shell');
     }
 
     // Wind protection
     if (isWindy) {
-      tips.push('💨 Windproof outer shell; secure loose hats, caps, or scarves against strong gusts');
+      tips.push('💨 Windproof outer shell; secure loose hats and caps against gusts');
     }
 
     // High Humidity
     if (current.humidity >= 80 && t >= 26) {
-      tips.push('💧 High tropical humidity: choose moisture-wicking and quick-drying athletic wear');
+      tips.push('💧 High humidity: choose moisture-wicking and quick-drying fabrics');
     }
 
     return tips;
@@ -284,7 +284,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
                 ))}
               </div>
             ) : (
-              // All Clear Loop
+              // All Clear Loop (clean & streamlined so it drifts leisurely)
               <div className="flex items-center gap-6 sm:gap-8 py-0.5">
                 {[1, 2].map((idx) => (
                   <span key={idx} className="inline-flex items-center gap-2 text-slate-300">
@@ -295,13 +295,13 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
                       No Active Watches or Warnings for {cityName}
                     </strong>
                     <span className="text-slate-400 font-normal">
-                      • Live river basin & storm monitors normal
+                      • River basin & storm scans normal
                     </span>
                     <span className="text-slate-400 font-normal">
                       • Atmospheric telemetry stable
                     </span>
                     <span className="text-sky-400 font-medium group-hover:underline">
-                      • Tap to inspect Live Threat Center radars
+                      • Tap to inspect Threat Center radars
                     </span>
                     <span className="text-slate-600 select-none">•</span>
                   </span>
@@ -350,7 +350,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         </div>
       )}
 
-      {/* Self-contained CSS: 120s slow crawling on phones with pause on touch & hover */}
+      {/* Ultra-slow marquee crawl with instant pause on touch/hover across all screens */}
       <style>{`
         @keyframes tickerScroll {
           0% {
@@ -363,12 +363,12 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         .ticker-track {
           display: flex;
           width: max-content;
-          animation: tickerScroll 55s linear infinite;
+          animation: tickerScroll 180s linear infinite;
         }
         .ticker-track-wear {
           display: flex;
           width: max-content;
-          animation: tickerScroll 48s linear infinite;
+          animation: tickerScroll 100s linear infinite;
         }
         .ticker-track:hover,
         .ticker-track:active,
@@ -378,7 +378,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         }
         @media (max-width: 640px) {
           .ticker-track {
-            animation-duration: 120s;
+            animation-duration: 240s;
           }
           .ticker-track-wear {
             animation-duration: 120s;
