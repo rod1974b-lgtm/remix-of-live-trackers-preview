@@ -1187,15 +1187,62 @@ function directSource(url: string): () => Promise<string> {
     });
 }
 
-const SATS: { id: string; name: string; covers: boolean; mapUrl: string; sources: (() => Promise<string>)[]; unavailable?: string }[] = [
-  { id: 'himawari', name: 'Himawari-9 (Thailand / SE Asia)', covers: true, mapUrl: 'https://zoom.earth/#view=13.54,99.82,6z/map=satellite', sources: [] },
-  { id: 'jma-full', name: 'Japan JMA (Asia Full Disk)', covers: true, mapUrl: 'https://zoom.earth/#view=36,138,5z/map=satellite', sources: [] },
-  { id: 'goes-east', name: 'GOES East (Americas)', covers: false, mapUrl: 'https://zoom.earth/#view=0,-75,3z/map=satellite', sources: [directSource('https://cdn.star.nesdis.noaa.gov/GOES19/ABI/FD/GEOCOLOR/1808x1808.jpg'), proxySource('goes-east')] },
-  { id: 'goes-west', name: 'GOES West (Pacific)', covers: false, mapUrl: 'https://zoom.earth/#view=0,-150,3z/map=satellite', sources: [directSource('https://cdn.star.nesdis.noaa.gov/GOES18/ABI/FD/GEOCOLOR/1808x1808.jpg'), proxySource('goes-west')] },
+// Geostationary projection helper: calculates location coordinates across regional and full-disk satellites
+function getSatLocationPos(
+  satId: string,
+  region: SatRegion,
+  lat: number,
+  lon: number
+): { top: string; left: string } | null {
+  // 1. Regional crop: Himawari-9 SE Asia (Thailand focus)
+  if (satId === 'himawari' && region === 'se1') {
+    if (lat >= -8 && lat <= 32 && lon >= 88 && lon <= 118) {
+      const top = ((32.1 - lat) / 40.1) * 100;
+      const left = ((lon - 85.0) / 28.3) * 100;
+      return {
+        top: `${Math.max(5, Math.min(95, top)).toFixed(1)}%`,
+        left: `${Math.max(5, Math.min(95, left)).toFixed(1)}%`,
+      };
+    }
+    return null;
+  }
+
+  // 2. Full-disk geostationary projections (sub-satellite longitudes)
+  let subLon: number | null = null;
+  if (satId === 'himawari' || satId === 'jma-full') subLon = 140.7;
+  else if (satId === 'goes-east') subLon = -75.2;
+  else if (satId === 'goes-west') subLon = -137.2;
+  else if (satId === 'meteosat') subLon = 0.0;
+
+  if (subLon !== null) {
+    const rad = Math.PI / 180;
+    const dLon = (lon - subLon) * rad;
+    const phi = lat * rad;
+    const cosC = Math.cos(phi) * Math.cos(dLon);
+    if (cosC > 0.12) {
+      const H = 6.61;
+      const k = (H - 1) / (H - cosC);
+      const x = k * Math.cos(phi) * Math.sin(dLon);
+      const y = -k * Math.sin(phi);
+      const diskRadius = 45.0; // Disk radius occupies ~45% of image width/height
+      return {
+        top: `${Math.max(5, Math.min(95, 50 + y * diskRadius)).toFixed(1)}%`,
+        left: `${Math.max(5, Math.min(95, 50 + x * diskRadius)).toFixed(1)}%`,
+      };
+    }
+  }
+  return null;
+}
+
+const SATS_DEF = [
+  { id: 'himawari', name: 'Himawari-9 (SE Asia)', subLon: 140.7, mapUrl: 'https://zoom.earth/#view=13.54,99.82,6z/map=satellite', sources: [] },
+  { id: 'jma-full', name: 'Japan JMA (Asia Full Disk)', subLon: 140.7, mapUrl: 'https://zoom.earth/#view=36,138,5z/map=satellite', sources: [] },
+  { id: 'goes-east', name: 'GOES East (Americas)', subLon: -75.2, mapUrl: 'https://zoom.earth/#view=0,-75,3z/map=satellite', sources: [directSource('https://cdn.star.nesdis.noaa.gov/GOES19/ABI/FD/GEOCOLOR/1808x1808.jpg'), proxySource('goes-east')] },
+  { id: 'goes-west', name: 'GOES West (Pacific)', subLon: -137.2, mapUrl: 'https://zoom.earth/#view=0,-150,3z/map=satellite', sources: [directSource('https://cdn.star.nesdis.noaa.gov/GOES18/ABI/FD/GEOCOLOR/1808x1808.jpg'), proxySource('goes-west')] },
   {
     id: 'meteosat',
     name: 'Meteosat (Europe / Africa)',
-    covers: false,
+    subLon: 0.0,
     mapUrl: 'https://view.eumetsat.int/productviewer?v=default',
     sources: [],
     unavailable: 'Meteosat direct stream unavailable. Please view via the official EUMETSAT viewer.',
@@ -1206,7 +1253,7 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
   const satLat = location?.latitude ?? 13.54;
   const satLon = location?.longitude ?? 99.82;
   const locName = location?.name ?? 'Ratchaburi';
-  const nearRatchaburi = Math.abs(satLat - 13.54) < 3 && Math.abs(satLon - 99.82) < 3;
+
   const [activeSat, setActiveSat] = useState(0); // default Himawari (index 0)
   const [pendingSat, setPendingSat] = useState<number | null>(null);
   const [band, setBand] = useState<SatBand>('trm'); // True Color vs IR
@@ -1217,17 +1264,26 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [showReticle, setShowReticle] = useState(true);
+
+  // Location marker is hidden until clicked
+  const [showReticle, setShowReticle] = useState(false);
+
   const [imageLoaded, setImageLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  const currentSat = SATS[activeSat] ?? SATS[0]!;
+  const currentSat = SATS_DEF[activeSat] ?? SATS_DEF[0]!;
   const isDirectHimawari = activeSat === 0 || activeSat === 1;
+  const activeRegion: SatRegion = activeSat === 1 ? 'fd_' : region;
+
+  // Compute location position on current satellite feed
+  const locPos = getSatLocationPos(currentSat.id, activeRegion, satLat, satLon);
+
+  // Check coverage dynamically based on coordinates
+  const isCovered = locPos !== null;
 
   // Build animated frames for Himawari
-  const activeRegion: SatRegion = activeSat === 1 ? 'fd_' : region;
   const frames = buildHimawariFrames(activeRegion, band);
   const activeFrame = frames[frameIdx] ?? frames[frames.length - 1]!;
 
@@ -1284,12 +1340,15 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
   }, [activeSat, tick, isDirectHimawari, currentSat]);
 
   const selectSat = (i: number) => {
-    if (!SATS[i]!.covers) {
+    const sat = SATS_DEF[i]!;
+    const testPos = getSatLocationPos(sat.id, 'fd_', satLat, satLon);
+    if (!testPos && sat.id !== 'himawari') {
       setPendingSat(i);
       return;
     }
     setPendingSat(null);
     setActiveSat(i);
+    setShowReticle(false); // Reset to hidden on satellite change
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setIsPlaying(false);
@@ -1323,7 +1382,7 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
     <div className="space-y-3 select-none">
       {/* Satellite Selector Pills */}
       <div className="flex flex-wrap items-center gap-1.5 pb-1 border-b border-slate-800">
-        {SATS.map((s, i) => (
+        {SATS_DEF.map((s, i) => (
           <button
             key={s.id}
             type="button"
@@ -1344,7 +1403,7 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-amber-200">
             <Info size={16} className="text-amber-300 shrink-0" />
-            <span><strong>{SATS[pendingSat]!.name}</strong> is out of coverage for {locName}.</span>
+            <span><strong>{SATS_DEF[pendingSat]!.name}</strong> is out of coverage for {locName}.</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -1359,6 +1418,7 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
               onClick={() => {
                 setActiveSat(pendingSat);
                 setPendingSat(null);
+                setShowReticle(false);
                 setZoom(1);
                 setPan({ x: 0, y: 0 });
               }}
@@ -1370,105 +1430,122 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
         </div>
       )}
 
-      {/* Controls Bar: Band, Region, Zoom, and Playback */}
-      {isDirectHimawari && (
-        <div className="bg-slate-800/90 rounded-2xl border border-slate-700 p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-2.5 shadow-sm">
-          {/* True Color vs IR Band Toggle */}
-          <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80">
-            <button
-              type="button"
-              onClick={() => setBand('trm')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                band === 'trm' ? 'bg-sky-500 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              ☀️ True Color (Day)
-            </button>
-            <button
-              type="button"
-              onClick={() => setBand('b13')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                band === 'b13' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🌙 Infrared IR (24/7)
-            </button>
-          </div>
-
-          {/* Area Focus Toggle */}
-          {activeSat === 0 && (
+      {/* Controls Bar: Band, Region, Zoom, and Click-to-Reveal Location */}
+      <div className="bg-slate-800/90 rounded-2xl border border-slate-700 p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-2.5 shadow-sm">
+        {/* Himawari specific toggles */}
+        {isDirectHimawari ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {/* True Color vs IR Band Toggle */}
             <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80">
               <button
                 type="button"
-                onClick={() => setRegion('se1')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                  region === 'se1' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                onClick={() => setBand('trm')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  band === 'trm' ? 'bg-sky-500 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                🇹🇭 Thailand Zoom
+                ☀️ True Color (Day)
               </button>
               <button
                 type="button"
-                onClick={() => setRegion('fd_')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                  region === 'fd_' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                onClick={() => setBand('b13')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  band === 'b13' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                🌏 Full Earth Disk
+                🌙 Infrared IR (24/7)
               </button>
             </div>
-          )}
 
-          {/* Zoom and Pin Controls */}
-          <div className="flex items-center gap-1.5 ml-auto">
-            {region === 'se1' && activeSat === 0 && nearRatchaburi && (
-              <button
-                type="button"
-                onClick={() => setShowReticle((v) => !v)}
-                title={`Toggle ${locName} Crosshair Marker`}
-                className={`px-2 py-1 rounded-lg text-xs font-bold border transition ${
-                  showReticle
-                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/50'
-                    : 'bg-slate-900/80 text-slate-400 border-slate-700 hover:text-white'
-                }`}
-              >
-                📍 {locName}
-              </button>
-            )}
-            <div className="flex items-center gap-1 bg-slate-900/90 px-1.5 py-1 rounded-xl border border-slate-700/80 text-xs text-slate-300">
-              <button
-                type="button"
-                onClick={() => handleZoom(0.25)}
-                disabled={zoom >= 2.5}
-                className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 font-bold disabled:opacity-40"
-              >
-                +
-              </button>
-              <span className="w-10 text-center font-bold text-sky-300">{Math.round(zoom * 100)}%</span>
-              <button
-                type="button"
-                onClick={() => handleZoom(-0.25)}
-                disabled={zoom <= 1}
-                className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 font-bold disabled:opacity-40"
-              >
-                −
-              </button>
-              {zoom > 1 && (
+            {/* Area Focus Toggle */}
+            {activeSat === 0 && (
+              <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80">
                 <button
                   type="button"
                   onClick={() => {
-                    setZoom(1);
-                    setPan({ x: 0, y: 0 });
+                    setRegion('se1');
+                    setShowReticle(false);
                   }}
-                  className="ml-1 text-[11px] text-amber-300 underline font-semibold"
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                    region === 'se1' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  Reset
+                  🇹🇭 SE Asia Zoom
                 </button>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegion('fd_');
+                    setShowReticle(false);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                    region === 'fd_' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🌏 Full Earth Disk
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-xs text-slate-300 font-semibold px-1">
+            {currentSat.name}
+          </div>
+        )}
+
+        {/* Universal Zoom and Click-to-Reveal Location Controls */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          {/* Location toggle button: hidden by default until clicked */}
+          {locPos && (
+            <button
+              type="button"
+              onClick={() => setShowReticle((v) => !v)}
+              title={showReticle ? `Hide ${locName} location pin` : `Show ${locName} location pin`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 ${
+                showReticle
+                  ? 'bg-rose-500/25 text-rose-200 border-rose-400 ring-1 ring-rose-400/50 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:text-white hover:border-slate-500'
+              }`}
+            >
+              <span>📍</span>
+              <span>{showReticle ? `Hide ${locName}` : `Show ${locName}`}</span>
+            </button>
+          )}
+
+          {/* Zoom In/Out/Reset */}
+          <div className="flex items-center gap-1 bg-slate-900/90 px-1.5 py-1 rounded-xl border border-slate-700/80 text-xs text-slate-300">
+            <button
+              type="button"
+              onClick={() => handleZoom(0.25)}
+              disabled={zoom >= 2.5}
+              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 font-bold disabled:opacity-40"
+            >
+              +
+            </button>
+            <span className="w-10 text-center font-bold text-sky-300">{Math.round(zoom * 100)}%</span>
+            <button
+              type="button"
+              onClick={() => handleZoom(-0.25)}
+              disabled={zoom <= 1}
+              className="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 font-bold disabled:opacity-40"
+            >
+              −
+            </button>
+            {zoom > 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setZoom(1);
+                  setPan({ x: 0, y: 0 });
+                }}
+                className="ml-1 text-[11px] text-amber-300 underline font-semibold"
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Main Satellite Viewport */}
       <div
@@ -1490,7 +1567,7 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-xs text-slate-300">
             <Loader2 size={36} className="animate-spin mb-3 text-sky-400" />
             <span className="text-sm font-semibold tracking-wide">Acquiring high-resolution satellite imagery...</span>
-            <span className="text-xs text-slate-400 mt-1">Connecting to JMA Himawari meteorological feed</span>
+            <span className="text-xs text-slate-400 mt-1">Connecting to meteorological satellite feed</span>
           </div>
         )}
 
@@ -1549,11 +1626,11 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
               }}
             />
 
-            {/* Target Reticle for selected city (SE Asia Frame) */}
-            {isDirectHimawari && region === 'se1' && showReticle && imageLoaded && nearRatchaburi && (
+            {/* Target Reticle for active city — rendered only when clicked */}
+            {showReticle && imageLoaded && locPos && (
               <div
                 className="absolute pointer-events-none z-10 flex flex-col items-center"
-                style={{ top: '46.5%', left: '52.3%', transform: 'translate(-50%, -50%)' }}
+                style={{ top: locPos.top, left: locPos.left, transform: 'translate(-50%, -50%)' }}
               >
                 <div className="relative flex items-center justify-center">
                   <div className="w-8 h-8 rounded-full border-2 border-rose-500 animate-ping opacity-60 absolute" />
@@ -1562,7 +1639,7 @@ function SatelliteTracker({ location }: { location?: GeoLocation | null }) {
                   </div>
                 </div>
                 <div className="mt-1 px-2 py-0.5 rounded-md bg-slate-900/90 border border-rose-500/60 text-[10px] font-black text-rose-300 whitespace-nowrap shadow-md">
-                  {locName} ({satLat.toFixed(1)}°N, {satLon.toFixed(1)}°E)
+                  {locName} ({satLat.toFixed(1)}°, {satLon.toFixed(1)}°)
                 </div>
               </div>
             )}
@@ -3304,4 +3381,3 @@ export function LiveTrackersModal({
     </div>
   );
 }
-
