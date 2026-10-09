@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/public/analyze-weather-image")({
     handlers: {
       POST: async ({ request }) => {
         try {
-          const apiKey = process.env.LOVABLE_API_KEY;
+          const apiKey = process.env["LOVABLE_API_KEY"];
           if (!apiKey) {
             return Response.json(
               { error: "AI service is currently unconfigured (missing API key)." },
