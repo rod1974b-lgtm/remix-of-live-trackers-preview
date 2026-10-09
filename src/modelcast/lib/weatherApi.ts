@@ -22,8 +22,21 @@ function getCached<T>(key: string): T | null {
   return null;
 }
 
+const MAX_CACHE_ENTRIES = 24;
+
 function setCached(key: string, data: unknown) {
-  cache.set(key, { data, ts: Date.now() });
+  const now = Date.now();
+  cache.delete(key);
+  cache.set(key, { data, ts: now });
+  // Drop expired entries, then oldest ones, so memory stays bounded
+  for (const [k, v] of cache) {
+    if (now - v.ts >= CACHE_MS) cache.delete(k);
+  }
+  while (cache.size > MAX_CACHE_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

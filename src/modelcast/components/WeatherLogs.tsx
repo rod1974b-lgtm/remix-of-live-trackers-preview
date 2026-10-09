@@ -311,25 +311,27 @@ export function WeatherLogs({
       const parsed = stored ? JSON.parse(stored) : [];
       setLogs(parsed);
 
-      parsed.forEach(async (log: any) => {
+      // Load only photos that are shown (main photo per log), once each
+      const ids = new Set<string>();
+      parsed.forEach((log: any) => {
         const pId = log.photoId || log.mainPhotoId;
-        if (pId && !photoCache[pId]) {
-          const dataUrl = await idbGetPhoto(pId);
-          if (dataUrl) setPhotoCache((prev) => ({ ...prev, [pId]: dataUrl }));
-        }
-        if (log.changes) {
-          log.changes.forEach(async (ch: any) => {
-            if (ch.photoId && !photoCache[ch.photoId]) {
-              const dataUrl = await idbGetPhoto(ch.photoId);
-              if (dataUrl) setPhotoCache((prev) => ({ ...prev, [ch.photoId]: dataUrl }));
-            }
-          });
-        }
+        if (pId) ids.add(pId);
+      });
+      setPhotoCache((prev) => {
+        // Drop photos for deleted logs to free memory
+        const next: Record<string, string> = {};
+        for (const id of ids) if (prev[id]) next[id] = prev[id];
+        ids.forEach(async (id) => {
+          if (next[id]) return;
+          const dataUrl = await idbGetPhoto(id);
+          if (dataUrl) setPhotoCache((p) => (p[id] ? p : { ...p, [id]: dataUrl }));
+        });
+        return next;
       });
     } catch {
       setLogs([]);
     }
-  }, [photoCache]);
+  }, []);
 
   useEffect(() => {
     loadLogs();

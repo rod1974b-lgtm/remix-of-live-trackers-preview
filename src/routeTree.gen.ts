@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicAnalyzeWeatherImageRouteImport } from './routes/api/public/analyze-weather-image'
 import { Route as ApiPublicSatelliteRouteImport } from './routes/api/public/satellite'
 
 const IndexRoute = IndexRouteImport.update({
@@ -17,6 +18,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAnalyzeWeatherImageRoute =
+  ApiPublicAnalyzeWeatherImageRouteImport.update({
+    id: '/api/public/analyze-weather-image',
+    path: '/api/public/analyze-weather-image',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSatelliteRoute = ApiPublicSatelliteRouteImport.update({
   id: '/api/public/satellite',
   path: '/api/public/satellite',
@@ -25,27 +32,35 @@ const ApiPublicSatelliteRoute = ApiPublicSatelliteRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/analyze-weather-image': typeof ApiPublicAnalyzeWeatherImageRoute
   '/api/public/satellite': typeof ApiPublicSatelliteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/analyze-weather-image': typeof ApiPublicAnalyzeWeatherImageRoute
   '/api/public/satellite': typeof ApiPublicSatelliteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/analyze-weather-image': typeof ApiPublicAnalyzeWeatherImageRoute
   '/api/public/satellite': typeof ApiPublicSatelliteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/public/satellite'
+  fullPaths: '/' | '/api/public/analyze-weather-image' | '/api/public/satellite'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/public/satellite'
-  id: '__root__' | '/' | '/api/public/satellite'
+  to: '/' | '/api/public/analyze-weather-image' | '/api/public/satellite'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/public/analyze-weather-image'
+    | '/api/public/satellite'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicAnalyzeWeatherImageRoute: typeof ApiPublicAnalyzeWeatherImageRoute
   ApiPublicSatelliteRoute: typeof ApiPublicSatelliteRoute
 }
 
@@ -56,6 +71,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/analyze-weather-image': {
+      id: '/api/public/analyze-weather-image'
+      path: '/api/public/analyze-weather-image'
+      fullPath: '/api/public/analyze-weather-image'
+      preLoaderRoute: typeof ApiPublicAnalyzeWeatherImageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/satellite': {
@@ -70,6 +92,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicAnalyzeWeatherImageRoute: ApiPublicAnalyzeWeatherImageRoute,
   ApiPublicSatelliteRoute: ApiPublicSatelliteRoute,
 }
 export const routeTree = rootRouteImport
