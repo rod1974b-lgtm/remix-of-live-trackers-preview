@@ -284,7 +284,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
                 ))}
               </div>
             ) : (
-              // All Clear Loop (clean & streamlined so it drifts leisurely)
+              // All Clear Loop
               <div className="flex items-center gap-6 sm:gap-8 py-0.5">
                 {[1, 2].map((idx) => (
                   <span key={idx} className="inline-flex items-center gap-2 text-slate-300">
@@ -317,13 +317,13 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         </div>
       </div>
 
-      {/* 2. WHAT TO WEAR SMART TICKER */}
+      {/* 2. WHAT TO WEAR SMART TICKER (Matched to Threat Center) */}
       {current && clothingTips.length > 0 && (
-        <div className="relative flex items-center overflow-hidden rounded-xl border border-sky-500/25 bg-gradient-to-r from-sky-950/40 via-slate-900/80 to-slate-900/90 px-2 py-1 sm:px-3 sm:py-1.5 text-xs shadow-sm select-none">
+        <div className="relative flex items-center overflow-hidden rounded-xl border border-sky-500/25 bg-gradient-to-r from-sky-950/40 via-slate-900/80 to-slate-900/90 px-2 py-1.5 sm:px-3 sm:py-2 text-xs shadow-sm select-none">
           {/* Left Sticky Badge: Short on phone, full on desktop */}
           <div className="relative z-10 flex shrink-0 items-center gap-1 sm:gap-1.5 pr-2 sm:pr-3 bg-slate-900/95 backdrop-blur-md rounded-md sm:rounded-lg py-0.5 px-1.5 sm:py-1 sm:px-2 border border-slate-700/60 shadow-sm">
             <Shirt size={13} className="text-sky-400 shrink-0" />
-            <span className="font-extrabold uppercase tracking-wider text-sky-300 text-[10px] sm:text-[10.5px]">
+            <span className="font-bold uppercase tracking-wider text-sky-300 text-[10px] sm:text-[10.5px]">
               <span className="sm:hidden">Wear</span>
               <span className="hidden sm:inline">What to Wear</span>
             </span>
@@ -334,8 +334,11 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             <div className="ticker-track-wear flex items-center whitespace-nowrap">
               <div className="flex items-center gap-6 sm:gap-8 py-0.5">
                 {clothingTips.concat(clothingTips).map((tip, idx) => (
-                  <span key={idx} className="inline-flex items-center gap-2 text-slate-200">
-                    <span className="text-sky-200 font-medium">{tip}</span>
+                  <span key={idx} className="inline-flex items-center gap-2 text-slate-300">
+                    <span className="inline-block px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-black text-[9.5px] sm:text-[10px] uppercase tracking-wider border border-sky-500/30">
+                      Outfit
+                    </span>
+                    <strong className="text-slate-100 font-medium">{tip}</strong>
                     <span className="text-slate-600 select-none">•</span>
                   </span>
                 ))}
@@ -345,12 +348,12 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
 
           {/* Right Icon Pill */}
           <div className="relative z-10 flex shrink-0 items-center pl-1.5 sm:pl-2 text-sky-400/80">
-            <Sparkles size={13} />
+            <Sparkles size={14} />
           </div>
         </div>
       )}
 
-      {/* Ultra-slow marquee crawl with instant pause on touch/hover across all screens */}
+      {/* Synchronized ultra-slow marquee speeds: 240s on mobile, 180s on desktop */}
       <style>{`
         @keyframes tickerScroll {
           0% {
@@ -360,15 +363,11 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             transform: translateX(-50%);
           }
         }
-        .ticker-track {
-          display: flex;
-          width: max-content;
-          animation: tickerScroll 180s linear infinite;
-        }
+        .ticker-track,
         .ticker-track-wear {
           display: flex;
           width: max-content;
-          animation: tickerScroll 100s linear infinite;
+          animation: tickerScroll 180s linear infinite;
         }
         .ticker-track:hover,
         .ticker-track:active,
@@ -377,11 +376,9 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
           animation-play-state: paused !important;
         }
         @media (max-width: 640px) {
-          .ticker-track {
-            animation-duration: 240s;
-          }
+          .ticker-track,
           .ticker-track-wear {
-            animation-duration: 120s;
+            animation-duration: 240s;
           }
         }
       `}</style>
