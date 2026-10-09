@@ -323,11 +323,8 @@ function AppContent() {
             </div>
             <div>
               <h1 className="text-lg font-bold leading-none text-white sm:text-xl">
-                {t('appName')}
+                Model Cast
               </h1>
-              <p className="hidden text-xs text-slate-400 sm:block">
-                {t('tagline')}
-              </p>
             </div>
           </div>
 
