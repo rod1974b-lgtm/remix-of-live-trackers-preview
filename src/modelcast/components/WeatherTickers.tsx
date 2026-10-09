@@ -1,15 +1,11 @@
 // @ts-nocheck
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  AlertTriangle,
   Shirt,
   ShieldAlert,
   CheckCircle2,
-  Wind,
-  CloudRain,
   ChevronRight,
   Sparkles,
-  Umbrella,
 } from 'lucide-react';
 import { useSettings } from '@/modelcast/lib/settings';
 import { callFunction } from '@/modelcast/lib/supabase';
@@ -225,40 +221,40 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') onOpenTrackers?.();
         }}
-        className={`group relative flex items-center overflow-hidden rounded-xl border px-2 py-1.5 sm:px-3 sm:py-2 text-xs transition-all duration-300 shadow-sm cursor-pointer select-none ${
+        className={`group relative flex items-center overflow-hidden rounded-xl border px-1.5 py-1 sm:px-2.5 sm:py-1.5 md:px-3 md:py-2 text-xs transition-all duration-300 shadow-sm cursor-pointer select-none ${
           hasAlerts
             ? 'border-red-500/50 bg-gradient-to-r from-red-950/70 via-red-900/40 to-slate-900/90 hover:border-red-400'
             : 'border-emerald-500/30 bg-gradient-to-r from-emerald-950/50 via-slate-900/80 to-slate-900/90 hover:border-emerald-400/60'
         }`}
         title="Click to open Live Trackers & Threat Center"
       >
-        {/* Left Sticky Badge: Short on phone, full on desktop */}
-        <div className="relative z-10 flex shrink-0 items-center gap-1 sm:gap-1.5 pr-2 sm:pr-3 bg-slate-900/95 backdrop-blur-md rounded-md sm:rounded-lg py-0.5 px-1.5 sm:py-1 sm:px-2 border border-slate-700/60 shadow-sm">
+        {/* Left Sticky Badge: Ultra-compact on phones, full on desktop */}
+        <div className="relative z-10 flex shrink-0 items-center gap-1 md:gap-1.5 pr-1.5 md:pr-2.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1.5 md:py-1 md:px-2 border border-slate-700/60 shadow-sm">
           {hasAlerts ? (
             <>
-              <span className="relative flex h-2 w-2">
+              <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-red-500"></span>
               </span>
-              <ShieldAlert size={13} className="text-red-400 shrink-0" />
-              <span className="font-extrabold uppercase tracking-wider text-red-300 text-[10px] sm:text-[10.5px]">
-                <span className="sm:hidden">Threats ({alerts.length})</span>
-                <span className="hidden sm:inline">Threat Center ({alerts.length})</span>
+              <ShieldAlert size={11} className="md:w-3.5 md:h-3.5 text-red-400 shrink-0" />
+              <span className="font-extrabold uppercase tracking-tight md:tracking-wider text-red-300 text-[9px] sm:text-[9.5px] md:text-[10.5px]">
+                <span className="md:hidden">Threats ({alerts.length})</span>
+                <span className="hidden md:inline">Threat Center ({alerts.length})</span>
               </span>
             </>
           ) : (
             <>
-              <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
-              <span className="font-bold uppercase tracking-wider text-emerald-300 text-[10px] sm:text-[10.5px]">
-                <span className="sm:hidden">Alerts</span>
-                <span className="hidden sm:inline">Threat Center</span>
+              <CheckCircle2 size={11} className="md:w-3.5 md:h-3.5 text-emerald-400 shrink-0" />
+              <span className="font-bold uppercase tracking-tight md:tracking-wider text-emerald-300 text-[9px] sm:text-[9.5px] md:text-[10.5px]">
+                <span className="md:hidden">Alerts</span>
+                <span className="hidden md:inline">Threat Center</span>
               </span>
             </>
           )}
         </div>
 
         {/* Marquee Content Mask */}
-        <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8px,black_calc(100%-8px),transparent)]">
+        <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6px,black_calc(100%-6px),transparent)]">
           <div className="ticker-track flex items-center whitespace-nowrap">
             {hasAlerts ? (
               // Active Alerts Loop
@@ -266,7 +262,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
                 {alerts.concat(alerts).map((a, i) => (
                   <span key={`${a.id}-${i}`} className="inline-flex items-center gap-2 text-slate-200">
                     <span
-                      className={`inline-block px-1.5 py-0.2 rounded font-black text-[9.5px] sm:text-[10px] uppercase tracking-wider ${
+                      className={`inline-block px-1.5 py-0.2 rounded font-black text-[9px] sm:text-[10px] uppercase tracking-wider ${
                         a.type === 'emergency'
                           ? 'bg-red-500 text-white'
                           : a.type === 'warning'
@@ -288,7 +284,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
               <div className="flex items-center gap-6 sm:gap-8 py-0.5">
                 {[1, 2].map((idx) => (
                   <span key={idx} className="inline-flex items-center gap-2 text-slate-300">
-                    <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-black text-[9.5px] sm:text-[10px] uppercase tracking-wider border border-emerald-500/30">
+                    <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-black text-[9px] sm:text-[10px] uppercase tracking-wider border border-emerald-500/30">
                       All Clear
                     </span>
                     <strong className="text-emerald-200 font-semibold">
@@ -312,30 +308,30 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         </div>
 
         {/* Right Arrow Action */}
-        <div className="relative z-10 flex shrink-0 items-center pl-1.5 sm:pl-2 text-slate-400 group-hover:text-white transition-colors">
-          <ChevronRight size={14} />
+        <div className="relative z-10 flex shrink-0 items-center pl-1 sm:pl-1.5 md:pl-2 text-slate-400 group-hover:text-white transition-colors">
+          <ChevronRight size={13} className="md:w-3.5 md:h-3.5" />
         </div>
       </div>
 
-      {/* 2. WHAT TO WEAR SMART TICKER (Matched to Threat Center) */}
+      {/* 2. WHAT TO WEAR SMART TICKER */}
       {current && clothingTips.length > 0 && (
-        <div className="relative flex items-center overflow-hidden rounded-xl border border-sky-500/25 bg-gradient-to-r from-sky-950/40 via-slate-900/80 to-slate-900/90 px-2 py-1.5 sm:px-3 sm:py-2 text-xs shadow-sm select-none">
-          {/* Left Sticky Badge: Short on phone, full on desktop */}
-          <div className="relative z-10 flex shrink-0 items-center gap-1 sm:gap-1.5 pr-2 sm:pr-3 bg-slate-900/95 backdrop-blur-md rounded-md sm:rounded-lg py-0.5 px-1.5 sm:py-1 sm:px-2 border border-slate-700/60 shadow-sm">
-            <Shirt size={13} className="text-sky-400 shrink-0" />
-            <span className="font-bold uppercase tracking-wider text-sky-300 text-[10px] sm:text-[10.5px]">
-              <span className="sm:hidden">Wear</span>
-              <span className="hidden sm:inline">What to Wear</span>
+        <div className="relative flex items-center overflow-hidden rounded-xl border border-sky-500/25 bg-gradient-to-r from-sky-950/40 via-slate-900/80 to-slate-900/90 px-1.5 py-1 sm:px-2.5 sm:py-1.5 md:px-3 md:py-2 text-xs shadow-sm select-none">
+          {/* Left Sticky Badge: Ultra-compact on phones, full on desktop */}
+          <div className="relative z-10 flex shrink-0 items-center gap-1 md:gap-1.5 pr-1.5 md:pr-2.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1.5 md:py-1 md:px-2 border border-slate-700/60 shadow-sm">
+            <Shirt size={11} className="md:w-3.5 md:h-3.5 text-sky-400 shrink-0" />
+            <span className="font-bold uppercase tracking-tight md:tracking-wider text-sky-300 text-[9px] sm:text-[9.5px] md:text-[10.5px]">
+              <span className="md:hidden">Wear</span>
+              <span className="hidden md:inline">What to Wear</span>
             </span>
           </div>
 
           {/* Marquee Content Mask */}
-          <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8px,black_calc(100%-8px),transparent)]">
+          <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6px,black_calc(100%-6px),transparent)]">
             <div className="ticker-track-wear flex items-center whitespace-nowrap">
               <div className="flex items-center gap-6 sm:gap-8 py-0.5">
                 {clothingTips.concat(clothingTips).map((tip, idx) => (
                   <span key={idx} className="inline-flex items-center gap-2 text-slate-300">
-                    <span className="inline-block px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-black text-[9.5px] sm:text-[10px] uppercase tracking-wider border border-sky-500/30">
+                    <span className="inline-block px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-black text-[9px] sm:text-[10px] uppercase tracking-wider border border-sky-500/30">
                       Outfit
                     </span>
                     <strong className="text-slate-100 font-medium">{tip}</strong>
@@ -347,8 +343,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
           </div>
 
           {/* Right Icon Pill */}
-          <div className="relative z-10 flex shrink-0 items-center pl-1.5 sm:pl-2 text-sky-400/80">
-            <Sparkles size={14} />
+          <div className="relative z-10 flex shrink-0 items-center pl-1 sm:pl-1.5 md:pl-2 text-sky-400/80">
+            <Sparkles size={13} className="md:w-3.5 md:h-3.5" />
           </div>
         </div>
       )}
@@ -375,7 +371,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         .ticker-track-wear:active {
           animation-play-state: paused !important;
         }
-        @media (max-width: 640px) {
+        @media (max-width: 768px) {
           .ticker-track,
           .ticker-track-wear {
             animation-duration: 240s;
