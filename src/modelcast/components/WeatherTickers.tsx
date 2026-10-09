@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Shirt,
   ShieldAlert,
@@ -26,7 +26,11 @@ interface AlertItem {
 }
 
 export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTickersProps) {
-  const { tempUnit, windUnit, convertTemp, convertWind } = useSettings();
+  const { units } = useSettings();
+  const tempUnit = units === 'us' ? 'F' : 'C';
+  const windUnit = units === 'us' ? 'mph' : 'km/h';
+  const convertTemp = useCallback((c: number) => (units === 'us' ? (c * 9) / 5 + 32 : c), [units]);
+  const convertWind = useCallback((k: number) => (units === 'us' ? k * 0.621371 : k), [units]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
