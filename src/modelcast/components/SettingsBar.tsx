@@ -21,41 +21,46 @@ export function SettingsBar() {
   const currentLang = LANGUAGES.find((l) => l.code === language);
 
   return (
-    <div className="flex items-center gap-2">
-      {}
+    <div className="flex items-center gap-1.5 sm:gap-2">
+      {/* Units Switcher: Compact '°C / °F' on phones, full 'Metric / Imperial' on PC */}
       <div className="flex rounded-lg border border-slate-700/60 bg-slate-800/60 p-0.5">
         <button
           onClick={() => setUnits('metric')}
-          className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all sm:px-3 sm:py-1.5 sm:text-sm ${
+          className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition-all sm:px-3 sm:py-1.5 sm:text-sm ${
             units === 'metric'
-              ? 'bg-sky-500 text-white'
+              ? 'bg-sky-500 text-white shadow-sm'
               : 'text-slate-400 hover:text-slate-200'
           }`}
+          title="Metric (°C, km/h, mm)"
         >
-          <Thermometer size={14} />
-          {t('metric')}
+          <Thermometer size={14} className="hidden sm:inline" />
+          <span className="sm:hidden font-bold">°C</span>
+          <span className="hidden sm:inline">{t('metric')}</span>
         </button>
         <button
           onClick={() => setUnits('us')}
-          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all sm:px-3 sm:py-1.5 sm:text-sm ${
+          className={`rounded-md px-2 py-1 text-xs font-semibold transition-all sm:px-3 sm:py-1.5 sm:text-sm ${
             units === 'us'
-              ? 'bg-sky-500 text-white'
+              ? 'bg-sky-500 text-white shadow-sm'
               : 'text-slate-400 hover:text-slate-200'
           }`}
+          title="Imperial (°F, mph, in)"
         >
-          {t('imperial')}
+          <span className="sm:hidden font-bold">°F</span>
+          <span className="hidden sm:inline">{t('imperial')}</span>
         </button>
       </div>
 
-      {}
+      {/* Language Dropdown: Compact flag on mobile, full button on desktop */}
       <div ref={langRef} className="relative">
         <button
           onClick={() => setLangOpen(!langOpen)}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2.5 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-700 sm:px-3 sm:text-sm"
+          className="flex items-center gap-1 rounded-lg border border-slate-700/60 bg-slate-800/60 px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-slate-700 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm"
+          title="Change language"
         >
-          <Globe size={14} />
-          <span className="font-medium">{currentLang?.flag}</span>
-          <ChevronDown size={14} className={`transition-transform ${langOpen ? 'rotate-180' : ''}`} />
+          <Globe size={13} className="hidden sm:inline" />
+          <span className="font-medium text-xs sm:text-sm">{currentLang?.flag}</span>
+          <ChevronDown size={13} className={`transition-transform duration-200 ${langOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {langOpen && (
@@ -69,7 +74,7 @@ export function SettingsBar() {
                 }}
                 className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors ${
                   language === lang.code
-                    ? 'bg-sky-500/15 text-sky-300'
+                    ? 'bg-sky-500/15 text-sky-300 font-semibold'
                     : 'text-slate-300 hover:bg-slate-700/40'
                 }`}
               >
