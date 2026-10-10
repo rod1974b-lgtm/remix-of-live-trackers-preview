@@ -16,7 +16,7 @@ const VALID_CONDITIONS = [
   "hazy",
   "foggy",
   "hot_humid",
-];
+] as const;
 
 export const Route = createFileRoute("/api/public/analyze-weather-image")({
   server: {
@@ -42,12 +42,19 @@ export const Route = createFileRoute("/api/public/analyze-weather-image")({
             );
           }
 
-          const systemPrompt = `You are a helpful meteorologist who explains weather in simple, friendly terms for everyday people.
-Look at the sky, clouds, lighting, ground moisture, and atmospheric conditions in this photo taken in ${location}.
+          const systemPrompt = `You are a certified professional meteorologist analyzing this user-submitted photo taken in ${location}.
+CRITICAL INSTRUCTION: Focus EXCLUSIVELY on sky and atmospheric weather conditions. Ignore buildings, people, vehicles, furniture, or indoor items except where they directly show weather evidence (e.g., wet ground, standing puddles, rain streaks, wind sway).
 
-Respond ONLY with a JSON object in this exact format:
+Analyze:
+1. Sky and cloud cover (cumulus, cumulonimbus, stratus, cirrus, overcast, or clear blue sky).
+2. Visible precipitation (rain shafts, puddles, wet pavement, drizzle, storms).
+3. Atmospheric clarity (haze, fog, smoke, bright harsh sun, high humidity).
+
+If the image is completely indoors or shows no discernible weather/sky, politely note that the image does not show outdoor sky conditions.
+
+Respond ONLY with a valid JSON object matching this exact structure:
 {
-  "simpleExplanation": "1 or 2 plain, easy-to-understand sentences explaining what the clouds or sky show and what weather is happening or likely approaching soon.",
+  "simpleExplanation": "1 or 2 clear, everyday sentences describing only the current sky/weather visible and what condition is developing or likely approaching.",
   "conditionId": "one of: sunny, partly_cloudy, overcast, drizzle, light_rain, moderate_rain, heavy_rain, extreme_rain, thunderstorm, windy, hazy, foggy, hot_humid",
   "confidence": 85
 }`;
@@ -96,13 +103,13 @@ Respond ONLY with a JSON object in this exact format:
             };
           }
 
-          const conditionId = VALID_CONDITIONS.includes(parsed.conditionId || "")
-            ? parsed.conditionId
+          const conditionId = (VALID_CONDITIONS as readonly string[]).includes(parsed.conditionId || "")
+            ? (parsed.conditionId as string)
             : "partly_cloudy";
 
           return Response.json({
             success: true,
-            explanation: parsed.simpleExplanation || "Clouds and atmospheric moisture visible in the sky.",
+            explanation: parsed.simpleExplanation || "Clouds and atmospheric conditions observed in the sky.",
             conditionId,
             confidence: parsed.confidence ?? 80,
           });
