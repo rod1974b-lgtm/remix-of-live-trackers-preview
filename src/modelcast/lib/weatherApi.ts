@@ -241,3 +241,50 @@ export async function searchLocations(query: string, language = 'en'): Promise<G
     country_code: r.country_code ?? '',
   }));
 }
+
+const SNAPSHOT_PREFIX = 'modelcast_snapshot_';
+
+export interface ForecastBundle {
+  current: CurrentWeather;
+  hourly: HourlyForecast;
+  daily: DailyForecast;
+  topModel: string;
+  fromSnapshot?: boolean;
+  savedAt?: number;
+}
+
+// Fetches current/hourly/daily together and keeps a saved copy so the app still shows data offline
+export async function fetchForecastWithSnapshots(
+  lat: number,
+  lon: number,
+  _timezone?: string,
+  forceRefresh = false,
+): Promise<ForecastBundle> {
+  const key = `${SNAPSHOT_PREFIX}${lat.toFixed(2)},${lon.toFixed(2)}`;
+  try {
+    const [current, hourly, daily] = await Promise.all([
+      fetchCurrentWeather(lat, lon, forceRefresh),
+      fetchHourlyForecast(lat, lon, forceRefresh),
+      fetchDailyForecast(lat, lon, forceRefresh),
+    ]);
+    const topModel = MODEL_IDS.find((id) => hourly.models[id]) ?? Object.keys(hourly.models)[0] ?? MODEL_IDS[0];
+    const bundle: ForecastBundle = { current, hourly, daily, topModel };
+    try {
+      localStorage.setItem(key, JSON.stringify({ ...bundle, savedAt: Date.now() }));
+    } catch {
+      // storage full or unavailable
+    }
+    return bundle;
+  } catch (err) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) return { ...JSON.parse(raw), fromSnapshot: true };
+    } catch {
+      // ignore
+    }
+    throw err;
+  }
+}
+
+export const fetchTopModelForecast = fetchForecastWithSnapshots;
+export type { CurrentWeather, DailyForecast, HourlyForecast };
