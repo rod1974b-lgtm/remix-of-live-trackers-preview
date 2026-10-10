@@ -36,8 +36,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
   // Velocity-matched marquee animation durations (seconds)
   const threatTrackRef = useRef<HTMLDivElement>(null);
   const wearTrackRef = useRef<HTMLDivElement>(null);
-  const [threatDuration, setThreatDuration] = useState<number>(75);
-  const [wearDuration, setWearDuration] = useState<number>(45);
+  const [threatDuration, setThreatDuration] = useState<number>(28);
+  const [wearDuration, setWearDuration] = useState<number>(18);
 
   // 1. Fetch live severe alerts, watches, GloFAS river flood signals
   useEffect(() => {
@@ -120,17 +120,17 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
               id: 'atmo-rain',
               type: 'watch',
               title: '🌧️ Heavy Torrential Rainfall',
-              detail: 'Intense precipitation rate detected. Localized ponding & reduced road visibility.',
-              source: 'Surface Radar',
+              detail: 'Intense precipitation rate; watch for flash ponding and reduced visibility.',
+              source: 'Atmospheric Station',
             });
           }
 
           if (isExtremeGust) {
             items.push({
               id: 'atmo-wind',
-              type: 'watch',
-              title: '💨 High Wind Advisory',
-              detail: `Sustained wind gusts reaching ${Math.round(convertWind(current.windSpeed))} ${windUnit}. Secure loose lightweight outdoor gear.`,
+              type: 'warning',
+              title: '💨 High Damaging Wind Gusts',
+              detail: `Peak localized winds reaching ${Math.round(convertWind(current.windSpeed))} ${windUnit}. Secure loose objects.`,
               source: 'Anemometer Array',
             });
           }
@@ -139,17 +139,14 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             items.push({
               id: 'atmo-heat',
               type: 'advisory',
-              title: '🌡️ Extreme Heat Advisory',
-              detail: `Ambient temp ${Math.round(convertTemp(current.temperature))}°${tempUnit}. Limit direct sun exposure.`,
+              title: '☀️ Extreme Heat Advisory',
+              detail: `Surface ambient temp at ${Math.round(convertTemp(current.temperature))}°${tempUnit}. Limit strenuous midday exposure.`,
               source: 'Thermal Sensors',
             });
           }
         }
 
         setAlerts(items);
-      })
-      .catch(() => {
-        if (isMounted) setAlerts([]);
       })
       .finally(() => {
         if (isMounted) setLoadingAlerts(false);
@@ -158,55 +155,44 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
     return () => {
       isMounted = false;
     };
-  }, [location, current, convertWind, convertTemp, windUnit, tempUnit]);
+  }, [location, current, convertTemp, convertWind, tempUnit, windUnit]);
 
-  // 2. Synthesize "What to Wear" Smart Recommendations
+  // 2. Synthesize Clothing & Gear Guidance
   const clothingTips = useMemo(() => {
     if (!current) return [];
 
     const tips: string[] = [];
     const t = current.temperature; // Celsius base
-    const code = current.weatherCode;
-    const isRain = (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code >= 95 && code <= 99);
-    const isSnow = (code >= 71 && code <= 77) || (code >= 85 && code <= 86);
-    const isWindy = current.windSpeed >= 25;
-    const isHot = t >= 30;
-    const isPleasant = t >= 22 && t < 30;
-    const isMild = t >= 16 && t < 22;
-    const isChilly = t >= 8 && t < 16;
-    const isCold = t < 8;
+    const wCode = current.weatherCode ?? 0;
 
-    // Base outfit
-    if (isHot) {
-      tips.push('☀️ Breathable cotton or linen fabrics, short sleeves, and loose shorts');
-      tips.push('🕶️ Sunglasses, sun hat, and SPF 50+ sunscreen');
-    } else if (isPleasant) {
-      tips.push('🌤️ Comfortable T-shirt with denim, chinos, or shorts');
-      tips.push('🕶️ Light sunglasses and walking sneakers');
-    } else if (isMild) {
-      tips.push('⛅ Long-sleeve shirt or light knit sweater; carry a light jacket');
-      tips.push('👖 Full trousers or comfortable jeans');
-    } else if (isChilly) {
-      tips.push('🧥 Medium-weight jacket, fleece, or layered sweater');
-      tips.push('🧣 Light scarf and closed warm shoes');
-    } else if (isCold) {
-      tips.push('❄️ Insulated coat or winter parka with thermal base layer');
-      tips.push('🧤 Warm beanie, gloves, and winter boots');
+    // Base outfit based on temperature
+    if (t >= 30) {
+      tips.push('Light breathable linen or cotton; UV protection & sunglasses recommended');
+    } else if (t >= 22) {
+      tips.push('T-shirt, polo or comfortable light layers; ideal mild weather attire');
+    } else if (t >= 16) {
+      tips.push('Light jacket, cardigan or long sleeves; comfortable for moving around');
+    } else if (t >= 8) {
+      tips.push('Warm fleece, sweater or midweight insulated jacket; chilly air');
+    } else {
+      tips.push('Thermal base layer, heavy coat, scarf and warm gloves');
     }
 
-    // Rain / Precipitation Gear
-    if (isRain) {
-      tips.push('☂️ Sturdy compact umbrella and water-resistant hooded jacket');
-      tips.push('👟 Non-slip, waterproof footwear');
+    // Weather condition overlays
+    const isRain = (wCode >= 51 && wCode <= 67) || (wCode >= 80 && wCode <= 82);
+    const isSnow = (wCode >= 71 && wCode <= 77) || (wCode >= 85 && wCode <= 86);
+    const isStorm = wCode >= 95;
+
+    if (isStorm) {
+      tips.push('⚡ Waterproof raincoat & non-slip shoes; avoid metal-frame umbrellas in open fields');
+    } else if (isRain) {
+      tips.push('☔ Compact umbrella & water-resistant outerwear or footwear');
+    } else if (isSnow) {
+      tips.push('❄️ Insulated boots with traction sole & water-repellent jacket');
     }
 
-    // Snow
-    if (isSnow) {
-      tips.push('🥾 Waterproof snow boots with tread; water-repellent outer shell');
-    }
-
-    // Wind protection
-    if (isWindy) {
+    // High Wind
+    if (current.windSpeed >= 28) {
       tips.push('💨 Windproof outer shell; secure loose hats and caps against gusts');
     }
 
@@ -227,23 +213,23 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
     return [...clothingTips, ...clothingTips];
   }, [clothingTips]);
 
-  // 3. Synchronize Marquee Speeds: Level 3 (14 px/s on mobile, 18 px/s on desktop)
+  // 3. Synchronize Marquee Speeds: Brisk Broadcast (36 px/s on mobile, 48 px/s on desktop)
   useEffect(() => {
     const updateDurations = () => {
       const isMobile = window.innerWidth < 768;
-      // Level 3 News Ticker velocity: 18.0 px/sec on PC, 14.0 px/sec on Phone
-      const targetVelocity = isMobile ? 14.0 : 18.0;
+      // Brisk Broadcast velocity: 48.0 px/sec on PC, 36.0 px/sec on Phone
+      const targetVelocity = isMobile ? 36.0 : 48.0;
 
       if (threatTrackRef.current) {
         const halfWidth = threatTrackRef.current.scrollWidth / 2;
         if (halfWidth > 0) {
-          setThreatDuration(Math.max(12, Math.round(halfWidth / targetVelocity)));
+          setThreatDuration(Math.max(8, Math.round(halfWidth / targetVelocity)));
         }
       }
       if (wearTrackRef.current) {
         const halfWidth = wearTrackRef.current.scrollWidth / 2;
         if (halfWidth > 0) {
-          setWearDuration(Math.max(12, Math.round(halfWidth / targetVelocity)));
+          setWearDuration(Math.max(8, Math.round(halfWidth / targetVelocity)));
         }
       }
     };
