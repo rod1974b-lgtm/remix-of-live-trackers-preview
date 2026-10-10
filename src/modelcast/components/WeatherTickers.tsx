@@ -36,8 +36,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
   // Velocity-matched marquee animation durations (seconds)
   const threatTrackRef = useRef<HTMLDivElement>(null);
   const wearTrackRef = useRef<HTMLDivElement>(null);
-  const [threatDuration, setThreatDuration] = useState<number>(180);
-  const [wearDuration, setWearDuration] = useState<number>(180);
+  const [threatDuration, setThreatDuration] = useState<number>(100);
+  const [wearDuration, setWearDuration] = useState<number>(60);
 
   // 1. Fetch live severe alerts, watches, GloFAS river flood signals
   useEffect(() => {
@@ -218,7 +218,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
     return tips;
   }, [current]);
 
-  // Seamless clothing loop data (repeats adequately so there is never an empty gap)
+  // Seamless clothing loop data
   const repeatedClothingTips = useMemo(() => {
     if (clothingTips.length === 0) return [];
     if (clothingTips.length <= 2) {
@@ -227,23 +227,23 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
     return [...clothingTips, ...clothingTips];
   }, [clothingTips]);
 
-  // 3. Synchronize Marquee Speeds: Equalize pixels-per-second on Phone and PC
+  // 3. Synchronize Marquee Speeds: 10 px/s on mobile, 14 px/s on desktop
   useEffect(() => {
     const updateDurations = () => {
       const isMobile = window.innerWidth < 768;
-      // Target linear velocity: 7.5 px/sec on PC, 6.0 px/sec on Phone
-      const targetVelocity = isMobile ? 6.0 : 7.5;
+      // Recommended reading velocity: 14.0 px/sec on PC, 10.0 px/sec on Phone
+      const targetVelocity = isMobile ? 10.0 : 14.0;
 
       if (threatTrackRef.current) {
         const halfWidth = threatTrackRef.current.scrollWidth / 2;
         if (halfWidth > 0) {
-          setThreatDuration(Math.max(25, Math.round(halfWidth / targetVelocity)));
+          setThreatDuration(Math.max(15, Math.round(halfWidth / targetVelocity)));
         }
       }
       if (wearTrackRef.current) {
         const halfWidth = wearTrackRef.current.scrollWidth / 2;
         if (halfWidth > 0) {
-          setWearDuration(Math.max(25, Math.round(halfWidth / targetVelocity)));
+          setWearDuration(Math.max(15, Math.round(halfWidth / targetVelocity)));
         }
       }
     };
@@ -279,8 +279,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         }`}
         title="Click to open Live Trackers & Threat Center"
       >
-        {/* Left Sticky Badge: Matched width & styling on phone and PC */}
-        <div className="relative z-10 flex shrink-0 items-center gap-1 md:gap-1.5 pr-1.5 md:pr-2.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1.5 md:py-1 md:px-2 border border-slate-700/60 shadow-sm w-[86px] min-w-[86px] md:w-auto md:min-w-0 justify-start">
+        {/* Left Sticky Badge: Shortened on phone (62px), full on PC */}
+        <div className="relative z-10 flex shrink-0 items-center justify-center gap-1 md:gap-1.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1 md:py-1 md:px-2 border border-slate-700/60 shadow-sm w-[62px] min-w-[62px] sm:w-[68px] sm:min-w-[68px] md:w-auto md:min-w-0">
           {hasAlerts ? (
             <>
               <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2 shrink-0">
@@ -288,8 +288,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-red-500"></span>
               </span>
               <ShieldAlert size={11} className="md:w-3.5 md:h-3.5 text-red-400 shrink-0" />
-              <span className="font-extrabold uppercase tracking-tight md:tracking-wider text-red-300 text-[9px] sm:text-[9.5px] md:text-[10.5px] truncate">
-                <span className="md:hidden">Threats ({alerts.length})</span>
+              <span className="font-extrabold uppercase tracking-tight md:tracking-wider text-red-300 text-[8.5px] sm:text-[9.5px] md:text-[10.5px] truncate">
+                <span className="md:hidden">Alerts{alerts.length > 0 ? ` (${alerts.length})` : ''}</span>
                 <span className="hidden md:inline">Threat Center ({alerts.length})</span>
               </span>
             </>
@@ -299,7 +299,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-emerald-400"></span>
               </span>
               <CheckCircle2 size={11} className="md:w-3.5 md:h-3.5 text-emerald-400 shrink-0" />
-              <span className="font-bold uppercase tracking-tight md:tracking-wider text-emerald-300 text-[9px] sm:text-[9.5px] md:text-[10.5px] truncate">
+              <span className="font-bold uppercase tracking-tight md:tracking-wider text-emerald-300 text-[8.5px] sm:text-[9.5px] md:text-[10.5px] truncate">
                 <span className="md:hidden">Alerts</span>
                 <span className="hidden md:inline">Threat Center</span>
               </span>
@@ -374,13 +374,13 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
       {/* 2. WHAT TO WEAR SMART TICKER */}
       {current && repeatedClothingTips.length > 0 && (
         <div className="group relative flex items-center overflow-hidden rounded-xl border border-sky-500/25 bg-gradient-to-r from-sky-950/40 via-slate-900/80 to-slate-900/90 hover:border-sky-500/50 px-1.5 py-1 sm:px-2.5 sm:py-1.5 md:px-3 md:py-2 text-xs transition-all duration-300 shadow-sm select-none">
-          {/* Left Sticky Badge: Exact matched width & layout as Threat badge */}
-          <div className="relative z-10 flex shrink-0 items-center gap-1 md:gap-1.5 pr-1.5 md:pr-2.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1.5 md:py-1 md:px-2 border border-slate-700/60 shadow-sm w-[86px] min-w-[86px] md:w-auto md:min-w-0 justify-start">
+          {/* Left Sticky Badge: Symmetrically shortened on phone (62px), full on PC */}
+          <div className="relative z-10 flex shrink-0 items-center justify-center gap-1 md:gap-1.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1 md:py-1 md:px-2 border border-slate-700/60 shadow-sm w-[62px] min-w-[62px] sm:w-[68px] sm:min-w-[68px] md:w-auto md:min-w-0">
             <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2 shrink-0">
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-sky-400"></span>
             </span>
             <Shirt size={11} className="md:w-3.5 md:h-3.5 text-sky-400 shrink-0" />
-            <span className="font-bold uppercase tracking-tight md:tracking-wider text-sky-300 text-[9px] sm:text-[9.5px] md:text-[10.5px] truncate">
+            <span className="font-bold uppercase tracking-tight md:tracking-wider text-sky-300 text-[8.5px] sm:text-[9.5px] md:text-[10.5px] truncate">
               <span className="md:hidden">Wear</span>
               <span className="hidden md:inline">What to Wear</span>
             </span>
@@ -407,7 +407,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             </div>
           </div>
 
-          {/* Right Indicator: Symmetrical with Threat Center */}
+          {/* Right Indicator */}
           <div className="relative z-10 flex shrink-0 items-center pl-1 sm:pl-1.5 md:pl-2 text-sky-400/80 group-hover:text-sky-300 transition-colors">
             <ChevronRight size={13} className="md:w-3.5 md:h-3.5" />
           </div>
