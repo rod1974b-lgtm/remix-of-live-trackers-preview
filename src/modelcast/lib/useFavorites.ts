@@ -136,28 +136,46 @@ export function useFavorites() {
       const jsonStr = JSON.stringify(payload, null, 2);
       const fileName = `modelcast-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
-      // 1. Mobile native share sheet (lets user tap "Google Drive" / "Save to Drive")
+      // Copy to clipboard as quick safety backup
       try {
-        const file = new File([jsonStr], fileName, { type: 'application/json' });
-        if (
-          typeof navigator !== 'undefined' &&
-          typeof navigator.canShare === 'function' &&
-          navigator.canShare({ files: [file] })
-        ) {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(jsonStr);
+        }
+      } catch {
+        // ignore clipboard error
+      }
+
+      // 1. Mobile Phone Share Sheet (Compatible with Google Drive "Save to Drive")
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        try {
+          // Note: using text/plain ensures Android & iOS share sheets display "Google Drive"
+          const file = new File([jsonStr], fileName, { type: 'text/plain;charset=utf-8' });
+          if (
+            typeof navigator.canShare === 'function' &&
+            navigator.canShare({ files: [file] })
+          ) {
+            await navigator.share({
+              files: [file],
+              title: 'ModelCast Backup',
+              text: 'Save ModelCast backup to Google Drive',
+            });
+            return true;
+          }
+
+          // Fallback share with text content directly to Drive
           await navigator.share({
-            files: [file],
             title: 'ModelCast Backup',
-            text: 'Save your ModelCast backup to Google Drive or Files',
+            text: jsonStr,
           });
           return true;
-        }
-      } catch (err: unknown) {
-        if ((err as { name?: string })?.name === 'AbortError') {
-          return false;
+        } catch (err: unknown) {
+          if ((err as { name?: string })?.name === 'AbortError') {
+            return false;
+          }
         }
       }
 
-      // 2. PC / Desktop: Modern Save As prompt (allows selecting Google Drive folder directly)
+      // 2. Desktop Save As file picker (lets you pick Google Drive synced folder)
       if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
         try {
           const filePicker = (window as unknown as {
@@ -172,7 +190,7 @@ export function useFavorites() {
             types: [
               {
                 description: 'JSON Backup File',
-                accept: { 'application/json': ['.json'] },
+                accept: { 'application/json': ['.json'], 'text/plain': ['.json', '.txt'] },
               },
             ],
           });
@@ -187,7 +205,7 @@ export function useFavorites() {
         }
       }
 
-      // 3. Fallback for older browsers (direct download)
+      // 3. Fallback direct download
       const blob = new Blob([jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -231,12 +249,11 @@ export function useFavorites() {
   }, []);
 
   const importBackup = useCallback(
-    async (file: File) => {
+    async (fileOrText: File | string) => {
       try {
-        const text = await file.text();
+        const text = typeof fileOrText === 'string' ? fileOrText : await fileOrText.text();
         const success = restoreBackup(text);
         if (success) {
-          // Alert and reload so all settings, units, language, and favorites reload freshly
           if (typeof window !== 'undefined') {
             window.alert('Backup restored successfully!');
             window.location.reload();
