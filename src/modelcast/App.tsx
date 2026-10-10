@@ -408,6 +408,9 @@ function AppContent() {
         {location && !loading && !error && current && hourly && daily && activeView === 'forecast' && (
           <div className="space-y-6">
             <CurrentWeatherCard
+              weather={current}
+              locationName={location.name}
+              country={location.country}
               location={location}
               current={current}
               topModel={topModel}
