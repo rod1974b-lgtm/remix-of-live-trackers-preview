@@ -1,11 +1,10 @@
 // @ts-nocheck
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Shirt,
   ShieldAlert,
   CheckCircle2,
   ChevronRight,
-  Sparkles,
 } from 'lucide-react';
 import { useSettings } from '@/modelcast/lib/settings';
 import { callFunction } from '@/modelcast/lib/supabase';
@@ -33,6 +32,12 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
   const convertWind = useCallback((k: number) => (units === 'us' ? k * 0.621371 : k), [units]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
+
+  // Velocity-matched marquee animation durations (seconds)
+  const threatTrackRef = useRef<HTMLDivElement>(null);
+  const wearTrackRef = useRef<HTMLDivElement>(null);
+  const [threatDuration, setThreatDuration] = useState<number>(180);
+  const [wearDuration, setWearDuration] = useState<number>(180);
 
   // 1. Fetch live severe alerts, watches, GloFAS river flood signals
   useEffect(() => {
@@ -98,32 +103,35 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
           const wCode = current.weatherCode ?? 0;
           const isThunderstorm = (wCode >= 95 && wCode <= 99);
           const isHeavyRain = (wCode >= 65 && wCode <= 67) || (wCode >= 81 && wCode <= 82);
+          const isExtremeGust = current.windSpeed >= 50; // km/h
 
           if (isThunderstorm) {
             items.push({
-              id: 'atmo-thunder',
+              id: 'atmo-tstorm',
               type: 'warning',
-              title: '⚡ Severe Thunderstorm Hazard',
-              detail: 'Active convective cells detected. Seek indoor shelter.',
-              source: 'Live Doppler',
-            });
-          } else if (isHeavyRain) {
-            items.push({
-              id: 'atmo-rain',
-              type: 'watch',
-              title: '🌧️ Heavy Rainfall Watch',
-              detail: 'Intense rain rate: risk of localized street flooding.',
-              source: 'Live Doppler',
+              title: '⚡ Severe Thunderstorm Activity',
+              detail: 'Doppler echo: convective cells active in regional airspace. Seek indoor shelter.',
+              source: 'Ground Radar Telemetry',
             });
           }
 
-          if (current.windSpeed >= 50) {
+          if (isHeavyRain && !isThunderstorm) {
             items.push({
-              id: 'atmo-gale',
-              type: 'advisory',
-              title: '💨 High Gale Advisory',
-              detail: `Sustained winds exceeding ${Math.round(convertWind(current.windSpeed))} ${windUnit}. Secure loose objects.`,
-              source: 'Surface Sensors',
+              id: 'atmo-rain',
+              type: 'watch',
+              title: '🌧️ Heavy Torrential Rainfall',
+              detail: 'Intense precipitation rate detected. Localized ponding & reduced road visibility.',
+              source: 'Surface Radar',
+            });
+          }
+
+          if (isExtremeGust) {
+            items.push({
+              id: 'atmo-wind',
+              type: 'watch',
+              title: '💨 High Wind Advisory',
+              detail: `Sustained wind gusts reaching ${Math.round(convertWind(current.windSpeed))} ${windUnit}. Secure loose lightweight outdoor gear.`,
+              source: 'Anemometer Array',
             });
           }
 
@@ -210,6 +218,45 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
     return tips;
   }, [current]);
 
+  // Seamless clothing loop data (repeats adequately so there is never an empty gap)
+  const repeatedClothingTips = useMemo(() => {
+    if (clothingTips.length === 0) return [];
+    if (clothingTips.length <= 2) {
+      return [...clothingTips, ...clothingTips, ...clothingTips, ...clothingTips];
+    }
+    return [...clothingTips, ...clothingTips];
+  }, [clothingTips]);
+
+  // 3. Synchronize Marquee Speeds: Equalize pixels-per-second on Phone and PC
+  useEffect(() => {
+    const updateDurations = () => {
+      const isMobile = window.innerWidth < 768;
+      // Target linear velocity: 7.5 px/sec on PC, 6.0 px/sec on Phone
+      const targetVelocity = isMobile ? 6.0 : 7.5;
+
+      if (threatTrackRef.current) {
+        const halfWidth = threatTrackRef.current.scrollWidth / 2;
+        if (halfWidth > 0) {
+          setThreatDuration(Math.max(25, Math.round(halfWidth / targetVelocity)));
+        }
+      }
+      if (wearTrackRef.current) {
+        const halfWidth = wearTrackRef.current.scrollWidth / 2;
+        if (halfWidth > 0) {
+          setWearDuration(Math.max(25, Math.round(halfWidth / targetVelocity)));
+        }
+      }
+    };
+
+    updateDurations();
+    const timer = setTimeout(updateDurations, 250);
+    window.addEventListener('resize', updateDurations);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateDurations);
+    };
+  }, [alerts, repeatedClothingTips]);
+
   if (!location) return null;
 
   const hasAlerts = alerts.length > 0;
@@ -232,24 +279,27 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         }`}
         title="Click to open Live Trackers & Threat Center"
       >
-        {/* Left Sticky Badge: Ultra-compact on phones, full on desktop */}
-        <div className="relative z-10 flex shrink-0 items-center gap-1 md:gap-1.5 pr-1.5 md:pr-2.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1.5 md:py-1 md:px-2 border border-slate-700/60 shadow-sm">
+        {/* Left Sticky Badge: Matched width & styling on phone and PC */}
+        <div className="relative z-10 flex shrink-0 items-center gap-1 md:gap-1.5 pr-1.5 md:pr-2.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1.5 md:py-1 md:px-2 border border-slate-700/60 shadow-sm w-[86px] min-w-[86px] md:w-auto md:min-w-0 justify-start">
           {hasAlerts ? (
             <>
-              <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2">
+              <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-red-500"></span>
               </span>
               <ShieldAlert size={11} className="md:w-3.5 md:h-3.5 text-red-400 shrink-0" />
-              <span className="font-extrabold uppercase tracking-tight md:tracking-wider text-red-300 text-[9px] sm:text-[9.5px] md:text-[10.5px]">
+              <span className="font-extrabold uppercase tracking-tight md:tracking-wider text-red-300 text-[9px] sm:text-[9.5px] md:text-[10.5px] truncate">
                 <span className="md:hidden">Threats ({alerts.length})</span>
                 <span className="hidden md:inline">Threat Center ({alerts.length})</span>
               </span>
             </>
           ) : (
             <>
+              <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2 shrink-0">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-emerald-400"></span>
+              </span>
               <CheckCircle2 size={11} className="md:w-3.5 md:h-3.5 text-emerald-400 shrink-0" />
-              <span className="font-bold uppercase tracking-tight md:tracking-wider text-emerald-300 text-[9px] sm:text-[9.5px] md:text-[10.5px]">
+              <span className="font-bold uppercase tracking-tight md:tracking-wider text-emerald-300 text-[9px] sm:text-[9.5px] md:text-[10.5px] truncate">
                 <span className="md:hidden">Alerts</span>
                 <span className="hidden md:inline">Threat Center</span>
               </span>
@@ -259,14 +309,18 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
 
         {/* Marquee Content Mask */}
         <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6px,black_calc(100%-6px),transparent)]">
-          <div className="ticker-track flex items-center whitespace-nowrap">
+          <div
+            ref={threatTrackRef}
+            className="ticker-track flex items-center whitespace-nowrap"
+            style={{ animationDuration: `${threatDuration}s` }}
+          >
             {hasAlerts ? (
               // Active Alerts Loop
               <div className="flex items-center gap-6 sm:gap-8 py-0.5">
                 {alerts.concat(alerts).map((a, i) => (
                   <span key={`${a.id}-${i}`} className="inline-flex items-center gap-2 text-slate-200">
                     <span
-                      className={`inline-block px-1.5 py-0.2 rounded font-black text-[9px] sm:text-[10px] uppercase tracking-wider ${
+                      className={`inline-block px-1.5 py-0.5 rounded font-black text-[9px] sm:text-[10px] uppercase tracking-wider ${
                         a.type === 'emergency'
                           ? 'bg-red-500 text-white'
                           : a.type === 'warning'
@@ -288,7 +342,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
               <div className="flex items-center gap-6 sm:gap-8 py-0.5">
                 {[1, 2].map((idx) => (
                   <span key={idx} className="inline-flex items-center gap-2 text-slate-300">
-                    <span className="inline-block px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-black text-[9px] sm:text-[10px] uppercase tracking-wider border border-emerald-500/30">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-black text-[9px] sm:text-[10px] uppercase tracking-wider border border-emerald-500/30">
                       All Clear
                     </span>
                     <strong className="text-emerald-200 font-semibold">
@@ -318,12 +372,15 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
       </div>
 
       {/* 2. WHAT TO WEAR SMART TICKER */}
-      {current && clothingTips.length > 0 && (
-        <div className="relative flex items-center overflow-hidden rounded-xl border border-sky-500/25 bg-gradient-to-r from-sky-950/40 via-slate-900/80 to-slate-900/90 px-1.5 py-1 sm:px-2.5 sm:py-1.5 md:px-3 md:py-2 text-xs shadow-sm select-none">
-          {/* Left Sticky Badge: Ultra-compact on phones, full on desktop */}
-          <div className="relative z-10 flex shrink-0 items-center gap-1 md:gap-1.5 pr-1.5 md:pr-2.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1.5 md:py-1 md:px-2 border border-slate-700/60 shadow-sm">
+      {current && repeatedClothingTips.length > 0 && (
+        <div className="group relative flex items-center overflow-hidden rounded-xl border border-sky-500/25 bg-gradient-to-r from-sky-950/40 via-slate-900/80 to-slate-900/90 hover:border-sky-500/50 px-1.5 py-1 sm:px-2.5 sm:py-1.5 md:px-3 md:py-2 text-xs transition-all duration-300 shadow-sm select-none">
+          {/* Left Sticky Badge: Exact matched width & layout as Threat badge */}
+          <div className="relative z-10 flex shrink-0 items-center gap-1 md:gap-1.5 pr-1.5 md:pr-2.5 bg-slate-900/95 backdrop-blur-md rounded-md py-0.5 px-1.5 md:py-1 md:px-2 border border-slate-700/60 shadow-sm w-[86px] min-w-[86px] md:w-auto md:min-w-0 justify-start">
+            <span className="relative flex h-1.5 w-1.5 md:h-2 md:w-2 shrink-0">
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-sky-400"></span>
+            </span>
             <Shirt size={11} className="md:w-3.5 md:h-3.5 text-sky-400 shrink-0" />
-            <span className="font-bold uppercase tracking-tight md:tracking-wider text-sky-300 text-[9px] sm:text-[9.5px] md:text-[10.5px]">
+            <span className="font-bold uppercase tracking-tight md:tracking-wider text-sky-300 text-[9px] sm:text-[9.5px] md:text-[10.5px] truncate">
               <span className="md:hidden">Wear</span>
               <span className="hidden md:inline">What to Wear</span>
             </span>
@@ -331,14 +388,18 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
 
           {/* Marquee Content Mask */}
           <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6px,black_calc(100%-6px),transparent)]">
-            <div className="ticker-track-wear flex items-center whitespace-nowrap">
+            <div
+              ref={wearTrackRef}
+              className="ticker-track-wear flex items-center whitespace-nowrap"
+              style={{ animationDuration: `${wearDuration}s` }}
+            >
               <div className="flex items-center gap-6 sm:gap-8 py-0.5">
-                {clothingTips.concat(clothingTips).map((tip, idx) => (
+                {repeatedClothingTips.map((tip, idx) => (
                   <span key={idx} className="inline-flex items-center gap-2 text-slate-300">
-                    <span className="inline-block px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-black text-[9px] sm:text-[10px] uppercase tracking-wider border border-sky-500/30">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-black text-[9px] sm:text-[10px] uppercase tracking-wider border border-sky-500/30">
                       Outfit
                     </span>
-                    <strong className="text-slate-100 font-medium">{tip}</strong>
+                    <strong className="text-slate-100 font-semibold">{tip}</strong>
                     <span className="text-slate-600 select-none">•</span>
                   </span>
                 ))}
@@ -346,14 +407,14 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             </div>
           </div>
 
-          {/* Right Icon Pill */}
-          <div className="relative z-10 flex shrink-0 items-center pl-1 sm:pl-1.5 md:pl-2 text-sky-400/80">
-            <Sparkles size={13} className="md:w-3.5 md:h-3.5" />
+          {/* Right Indicator: Symmetrical with Threat Center */}
+          <div className="relative z-10 flex shrink-0 items-center pl-1 sm:pl-1.5 md:pl-2 text-sky-400/80 group-hover:text-sky-300 transition-colors">
+            <ChevronRight size={13} className="md:w-3.5 md:h-3.5" />
           </div>
         </div>
       )}
 
-      {/* Synchronized ultra-slow marquee speeds: 240s on mobile, 180s on desktop */}
+      {/* Marquee Keyframes & Hover/Touch Pause */}
       <style>{`
         @keyframes tickerScroll {
           0% {
@@ -367,19 +428,15 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
         .ticker-track-wear {
           display: flex;
           width: max-content;
-          animation: tickerScroll 180s linear infinite;
+          animation-name: tickerScroll;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
         }
         .ticker-track:hover,
         .ticker-track:active,
         .ticker-track-wear:hover,
         .ticker-track-wear:active {
           animation-play-state: paused !important;
-        }
-        @media (max-width: 768px) {
-          .ticker-track,
-          .ticker-track-wear {
-            animation-duration: 240s;
-          }
         }
       `}</style>
     </div>
