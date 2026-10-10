@@ -285,3 +285,6 @@ export async function fetchForecastWithSnapshots(
     throw err;
   }
 }
+
+export const fetchTopModelForecast = fetchForecastWithSnapshots;
+export type { CurrentWeather, DailyForecast, HourlyForecast };
