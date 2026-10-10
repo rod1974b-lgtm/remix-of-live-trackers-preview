@@ -1,6 +1,6 @@
 // @ts-nocheck -- imported Bolt code, written for a looser TS config
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { CloudSun, Loader2, AlertTriangle, Globe2, Navigation } from 'lucide-react';
+import { CloudSun, Loader2, AlertTriangle, Globe2, Navigation, Check, RefreshCw } from 'lucide-react';
 import { SearchBar } from '@/modelcast/components/SearchBar';
 import { CurrentWeatherCard } from '@/modelcast/components/CurrentWeatherCard';
 import { TopModelForecast } from '@/modelcast/components/TopModelForecast';
@@ -87,6 +87,8 @@ function AppContent() {
   const [accuracyResults, setAccuracyResults] = useState<ModelAccuracy[]>([]);
   const [activeView, setActiveView] = useState<'forecast' | 'logs'>('forecast');
   const [refreshing, setRefreshing] = useState(false);
+  const [showRefreshToast, setShowRefreshToast] = useState(false);
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const {
     favorites,
     isFavorite,
@@ -199,8 +201,10 @@ function AppContent() {
     }
   }, []);
 
-  const loadWeatherData = useCallback(async (loc: GeoLocation) => {
-    setLoading(true);
+  const loadWeatherData = useCallback(async (loc: GeoLocation, isManualRefresh = false) => {
+    if (!isManualRefresh) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const [cur, hr, dy] = await Promise.all([
@@ -212,6 +216,14 @@ function AppContent() {
       setHourly(hr);
       setDaily(dy);
       setLastUpdated(new Date());
+
+      if (isManualRefresh) {
+        setShowRefreshToast(true);
+        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = setTimeout(() => {
+          setShowRefreshToast(false);
+        }, 3200);
+      }
 
       // Test accuracy across models in parallel with weather load
       testModelAccuracy(loc.latitude, loc.longitude, loc.timezone)
@@ -234,7 +246,7 @@ function AppContent() {
         // ignore
       }
       syncLocationToUrl(loc);
-      loadWeatherData(loc);
+      loadWeatherData(loc, false);
       loadLocalVotes(loc);
     },
     [loadWeatherData, loadLocalVotes]
@@ -288,7 +300,7 @@ function AppContent() {
 
   useEffect(() => {
     if (location && restored) {
-      loadWeatherData(location);
+      loadWeatherData(location, false);
       loadLocalVotes(location);
       loadGlobalVotes();
     }
@@ -305,13 +317,13 @@ function AppContent() {
   }, [accuracyResults]);
 
   const handleRefresh = useCallback(() => {
-    if (location) {
+    if (location && !refreshing) {
       setRefreshing(true);
-      loadWeatherData(location);
+      loadWeatherData(location, true);
       loadLocalVotes(location);
       loadGlobalVotes();
     }
-  }, [location, loadWeatherData, loadLocalVotes, loadGlobalVotes]);
+  }, [location, refreshing, loadWeatherData, loadLocalVotes, loadGlobalVotes]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -326,6 +338,12 @@ function AppContent() {
                 Model Cast
               </h1>
             </div>
+            {refreshing && (
+              <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-xs font-medium text-sky-400 animate-pulse">
+                <RefreshCw size={12} className="animate-spin" />
+                <span>Refreshing...</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -430,10 +448,25 @@ function AppContent() {
               locationName={location.name}
               country={location.country}
             />
+
+            {/* Live Timestamp with exact seconds for clear refresh proof */}
             {lastUpdated && (
-              <p className="-mt-4 text-right text-xs text-slate-400">
-                Last updated {lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Bangkok' })} ICT
-              </p>
+              <div className="-mt-4 flex items-center justify-end gap-2 text-xs text-slate-400">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>
+                  Last updated{' '}
+                  <span className="font-mono font-semibold text-slate-200">
+                    {lastUpdated.toLocaleTimeString('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: false,
+                      timeZone: 'Asia/Bangkok',
+                    })}
+                  </span>{' '}
+                  ICT
+                </span>
+              </div>
             )}
 
             {/* Day & Night Weather Report Summary (Sun, Moon, Narrative, Pressure, UV) */}
@@ -468,6 +501,31 @@ function AppContent() {
       <footer className="border-t border-slate-800/80 py-6">
         <p className="text-center text-sm text-slate-500">{t('footerText')}</p>
       </footer>
+
+      {/* Floating Refresh Proof Toast */}
+      {showRefreshToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-2xl border border-emerald-500/40 bg-slate-900/95 px-4 py-3 text-sm font-medium text-emerald-300 shadow-2xl shadow-emerald-500/20 backdrop-blur-md">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+            <Check size={14} className="stroke-[2.5]" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-white">Weather Data Refreshed</span>
+            <span className="text-[11px] text-emerald-400/90">
+              Live models updated at{' '}
+              {lastUpdated
+                ? lastUpdated.toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false,
+                    timeZone: 'Asia/Bangkok',
+                  })
+                : 'now'}{' '}
+              ICT
+            </span>
+          </div>
+        </div>
+      )}
 
       {location && hourly && daily && (
         <WeatherModelsLiveModal
