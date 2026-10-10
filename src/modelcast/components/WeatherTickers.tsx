@@ -293,8 +293,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
           )}
         </div>
 
-        {/* Marquee Content Mask */}
-        <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6px,black_calc(100%-6px),transparent)]">
+        {/* Marquee Content Mask - min-w-0 prevents mobile screen stretching */}
+        <div className="relative flex-1 min-w-0 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6px,black_calc(100%-6px),transparent)]">
           <div
             ref={threatTrackRef}
             className="ticker-track flex items-center whitespace-nowrap"
@@ -329,20 +329,10 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
                 {[1, 2].map((idx) => (
                   <span key={idx} className="inline-flex items-center gap-2 text-slate-300">
                     <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-black text-[9px] sm:text-[10px] uppercase tracking-wider border border-emerald-500/30">
-                      All Clear
+                      Normal
                     </span>
-                    <strong className="text-emerald-200 font-semibold">
-                      No Active Watches or Warnings for {cityName}
-                    </strong>
-                    <span className="text-slate-400 font-normal">
-                      • River basin & storm scans normal
-                    </span>
-                    <span className="text-slate-400 font-normal">
-                      • Atmospheric telemetry stable
-                    </span>
-                    <span className="text-sky-400 font-medium group-hover:underline">
-                      • Tap to inspect Threat Center radars
-                    </span>
+                    <strong className="text-slate-100 font-semibold">{cityName} Atmospheric Watch:</strong>
+                    <span>No active meteorological warnings, gale advisories, or flood surge flags in effect.</span>
                     <span className="text-slate-600 select-none">•</span>
                   </span>
                 ))}
@@ -351,7 +341,7 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
           </div>
         </div>
 
-        {/* Right Arrow Action */}
+        {/* Right Indicator */}
         <div className="relative z-10 flex shrink-0 items-center pl-1 sm:pl-1.5 md:pl-2 text-slate-400 group-hover:text-white transition-colors">
           <ChevronRight size={13} className="md:w-3.5 md:h-3.5" />
         </div>
@@ -372,8 +362,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
             </span>
           </div>
 
-          {/* Marquee Content Mask */}
-          <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6px,black_calc(100%-6px),transparent)]">
+          {/* Marquee Content Mask - min-w-0 prevents mobile screen stretching */}
+          <div className="relative flex-1 min-w-0 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6px,black_calc(100%-6px),transparent)]">
             <div
               ref={wearTrackRef}
               className="ticker-track-wear flex items-center whitespace-nowrap"
