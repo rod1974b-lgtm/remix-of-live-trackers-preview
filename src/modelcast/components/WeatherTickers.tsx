@@ -36,8 +36,8 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
   // Velocity-matched marquee animation durations (seconds)
   const threatTrackRef = useRef<HTMLDivElement>(null);
   const wearTrackRef = useRef<HTMLDivElement>(null);
-  const [threatDuration, setThreatDuration] = useState<number>(100);
-  const [wearDuration, setWearDuration] = useState<number>(60);
+  const [threatDuration, setThreatDuration] = useState<number>(75);
+  const [wearDuration, setWearDuration] = useState<number>(45);
 
   // 1. Fetch live severe alerts, watches, GloFAS river flood signals
   useEffect(() => {
@@ -227,23 +227,23 @@ export function WeatherTickers({ location, current, onOpenTrackers }: WeatherTic
     return [...clothingTips, ...clothingTips];
   }, [clothingTips]);
 
-  // 3. Synchronize Marquee Speeds: 10 px/s on mobile, 14 px/s on desktop
+  // 3. Synchronize Marquee Speeds: Level 3 (14 px/s on mobile, 18 px/s on desktop)
   useEffect(() => {
     const updateDurations = () => {
       const isMobile = window.innerWidth < 768;
-      // Recommended reading velocity: 14.0 px/sec on PC, 10.0 px/sec on Phone
-      const targetVelocity = isMobile ? 10.0 : 14.0;
+      // Level 3 News Ticker velocity: 18.0 px/sec on PC, 14.0 px/sec on Phone
+      const targetVelocity = isMobile ? 14.0 : 18.0;
 
       if (threatTrackRef.current) {
         const halfWidth = threatTrackRef.current.scrollWidth / 2;
         if (halfWidth > 0) {
-          setThreatDuration(Math.max(15, Math.round(halfWidth / targetVelocity)));
+          setThreatDuration(Math.max(12, Math.round(halfWidth / targetVelocity)));
         }
       }
       if (wearTrackRef.current) {
         const halfWidth = wearTrackRef.current.scrollWidth / 2;
         if (halfWidth > 0) {
-          setWearDuration(Math.max(15, Math.round(halfWidth / targetVelocity)));
+          setWearDuration(Math.max(12, Math.round(halfWidth / targetVelocity)));
         }
       }
     };
