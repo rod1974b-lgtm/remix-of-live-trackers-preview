@@ -136,7 +136,7 @@ export function useFavorites() {
       const jsonStr = JSON.stringify(payload, null, 2);
       const fileName = `modelcast-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
-      // 1. Native mobile share sheet (iOS "Save to Files" / Android share sheet)
+      // 1. Mobile native share sheet (lets user tap "Google Drive" / "Save to Drive")
       try {
         const file = new File([jsonStr], fileName, { type: 'application/json' });
         if (
@@ -147,7 +147,7 @@ export function useFavorites() {
           await navigator.share({
             files: [file],
             title: 'ModelCast Backup',
-            text: 'Backup of your ModelCast favorite cities and settings',
+            text: 'Save your ModelCast backup to Google Drive or Files',
           });
           return true;
         }
@@ -157,7 +157,37 @@ export function useFavorites() {
         }
       }
 
-      // 2. Browser file download fallback (desktop and browsers without file share)
+      // 2. PC / Desktop: Modern Save As prompt (allows selecting Google Drive folder directly)
+      if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+        try {
+          const filePicker = (window as unknown as {
+            showSaveFilePicker: (opts: {
+              suggestedName: string;
+              types: Array<{ description: string; accept: Record<string, string[]> }>;
+            }) => Promise<{ createWritable: () => Promise<{ write: (data: string) => Promise<void>; close: () => Promise<void> }> }>;
+          }).showSaveFilePicker;
+
+          const handle = await filePicker({
+            suggestedName: fileName,
+            types: [
+              {
+                description: 'JSON Backup File',
+                accept: { 'application/json': ['.json'] },
+              },
+            ],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(jsonStr);
+          await writable.close();
+          return true;
+        } catch (err: unknown) {
+          if ((err as { name?: string })?.name === 'AbortError') {
+            return false;
+          }
+        }
+      }
+
+      // 3. Fallback for older browsers (direct download)
       const blob = new Blob([jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -200,13 +230,42 @@ export function useFavorites() {
     }
   }, []);
 
+  const importBackup = useCallback(
+    async (file: File) => {
+      try {
+        const text = await file.text();
+        const success = restoreBackup(text);
+        if (success) {
+          // Alert and reload so all settings, units, language, and favorites reload freshly
+          if (typeof window !== 'undefined') {
+            window.alert('Backup restored successfully!');
+            window.location.reload();
+          }
+          return true;
+        }
+        if (typeof window !== 'undefined') {
+          window.alert('Invalid backup file. Please check the file and try again.');
+        }
+        return false;
+      } catch {
+        if (typeof window !== 'undefined') {
+          window.alert('Could not read backup file.');
+        }
+        return false;
+      }
+    },
+    [restoreBackup],
+  );
+
   return {
     favorites,
     addFavorite,
     removeFavorite,
     isFavorite,
     copyShareLink,
+    shareUrl: copyShareLink,
     exportBackup,
     restoreBackup,
+    importBackup,
   };
 }
