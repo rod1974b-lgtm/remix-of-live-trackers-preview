@@ -329,3 +329,17 @@ export async function testModelAccuracy(
 
   return [...withData, ...withoutData];
 }
+
+// Runs the accuracy ranking for a saved/selected city; never blocks the forecast if it fails
+export async function runAccuracyTests(loc: {
+  latitude: number;
+  longitude: number;
+  name?: string;
+}): Promise<ModelAccuracy[]> {
+  try {
+    return await testModelAccuracy(loc.latitude, loc.longitude, loc.name);
+  } catch (err) {
+    console.warn('Accuracy test failed:', err);
+    return [];
+  }
+}
