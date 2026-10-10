@@ -1,70 +1,71 @@
-// @ts-nocheck -- imported Bolt code, written for a looser TS config
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { CloudSun, Loader2, AlertTriangle, Globe2, Navigation, Check, RefreshCw } from 'lucide-react';
+// @ts-nocheck
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  fetchTopModelForecast,
+  fetchForecastWithSnapshots,
+  type CurrentWeather,
+  type HourlyForecast,
+  type DailyForecast,
+} from '@/modelcast/lib/weatherApi';
+import { runAccuracyTests, type ModelAccuracy } from '@/modelcast/lib/accuracyApi';
+import { supabase } from '@/modelcast/lib/supabase';
+import { SettingsProvider, useSettings } from '@/modelcast/lib/settings';
+import { useFavorites } from '@/modelcast/lib/useFavorites';
+import type { GeoLocation, VoteAggregate } from '@/modelcast/lib/types';
+
 import { SearchBar } from '@/modelcast/components/SearchBar';
 import { CurrentWeatherCard } from '@/modelcast/components/CurrentWeatherCard';
+import { DayNightSummary } from '@/modelcast/components/DayNightSummary';
+import { HourlyChart } from '@/modelcast/components/HourlyChart';
 import { TopModelForecast } from '@/modelcast/components/TopModelForecast';
+import { FavoritePlaces } from '@/modelcast/components/FavoritePlaces';
+import { SettingsBar } from '@/modelcast/components/SettingsBar';
 import { WeatherModelsLiveModal } from '@/modelcast/components/WeatherModelsLiveModal';
 import { LiveTrackersModal } from '@/modelcast/components/LiveTrackersModal';
 import { WeatherLogs } from '@/modelcast/components/WeatherLogs';
-import { SettingsBar } from '@/modelcast/components/SettingsBar';
-import { HeaderMenu } from '@/modelcast/components/HeaderMenu';
-import { SettingsProvider, useSettings } from '@/modelcast/lib/settings';
-import { DayNightSummary } from '@/modelcast/components/DayNightSummary';
 import { WeatherTickers } from '@/modelcast/components/WeatherTickers';
-import type {
-  CurrentWeather,
-  DailyForecast,
-  GeoLocation,
-  HourlyForecast,
-  ModelAccuracy,
-  VoteAggregate,
-  WeatherModel,
-} from '@/modelcast/lib/types';
-import {
-  fetchCurrentWeather,
-  fetchDailyForecast,
-  fetchHourlyForecast,
-} from '@/modelcast/lib/weatherApi';
-import { supabase } from '@/modelcast/lib/supabase';
-import { WEATHER_MODELS } from '@/modelcast/lib/weatherModels';
-import { testModelAccuracy } from '@/modelcast/lib/accuracyApi';
-import { useFavorites } from '@/modelcast/lib/useFavorites';
-import { FavoritePlaces } from '@/modelcast/components/FavoritePlaces';
+import { HeaderMenu } from '@/modelcast/components/HeaderMenu';
+
+import { Navigation, CloudRain, AlertTriangle, RefreshCw, Check, Upload, FileText, X } from 'lucide-react';
 
 const LAST_LOCATION_KEY = 'modelcast:last-location';
 
 function getLocationFromUrl(): GeoLocation | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const p = new URLSearchParams(window.location.search);
-    const lat = Number(p.get('lat'));
-    const lon = Number(p.get('lon'));
-    const city = p.get('city');
-    if (!city || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    return {
-      id: Number(p.get('cid')) || Math.round(Math.abs(lat * 1000 + lon * 10)),
-      name: city,
-      latitude: lat,
-      longitude: lon,
-      country: p.get('country') ?? '',
-      country_code: p.get('cc') ?? '',
-      timezone: p.get('tz') ?? 'auto',
-    } as GeoLocation;
+    const params = new URLSearchParams(window.location.search);
+    const lat = params.get('lat');
+    const lon = params.get('lon');
+    const city = params.get('city');
+    if (lat && lon && city) {
+      return {
+        id: Number(params.get('cid')) || Date.now(),
+        name: city,
+        latitude: parseFloat(lat),
+        longitude: parseFloat(lon),
+        country: params.get('country') || '',
+        country_code: params.get('cc') || '',
+        timezone: params.get('tz') || 'UTC',
+      };
+    }
   } catch {
-    return null;
+    // ignore
   }
+  return null;
 }
 
 function syncLocationToUrl(loc: GeoLocation) {
+  if (typeof window === 'undefined') return;
   try {
     const url = new URL(window.location.href);
-    url.searchParams.set('city', loc.name ?? '');
-    url.searchParams.set('lat', String(loc.latitude));
-    url.searchParams.set('lon', String(loc.longitude));
+    url.searchParams.set('city', loc.name);
+    url.searchParams.set('lat', loc.latitude.toFixed(4));
+    url.searchParams.set('lon', loc.longitude.toFixed(4));
     url.searchParams.set('cid', String(loc.id));
     if (loc.country) url.searchParams.set('country', loc.country);
-    if ((loc as { country_code?: string }).country_code)
+    if ((loc as { country_code?: string }).country_code) {
       url.searchParams.set('cc', (loc as { country_code?: string }).country_code!);
+    }
     if (loc.timezone) url.searchParams.set('tz', loc.timezone);
     window.history.replaceState(null, '', url.toString());
   } catch {
@@ -75,6 +76,7 @@ function syncLocationToUrl(loc: GeoLocation) {
 function AppContent() {
   const { t } = useSettings();
   const [location, setLocation] = useState<GeoLocation | null>(null);
+  const [topModel, setTopModel] = useState<string>('ecmwf_ifs025');
   const [current, setCurrent] = useState<CurrentWeather | null>(null);
   const [hourly, setHourly] = useState<HourlyForecast | null>(null);
   const [daily, setDaily] = useState<DailyForecast | null>(null);
@@ -82,6 +84,8 @@ function AppContent() {
   const [error, setError] = useState<string | null>(null);
   const [showModels, setShowModels] = useState(false);
   const [showTrackers, setShowTrackers] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   const [localVotes, setLocalVotes] = useState<VoteAggregate[]>([]);
   const [globalVotes, setGlobalVotes] = useState<VoteAggregate[]>([]);
   const [accuracyResults, setAccuracyResults] = useState<ModelAccuracy[]>([]);
@@ -102,7 +106,7 @@ function AppContent() {
   const [restored, setRestored] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  // Restore last selected location on initial load (URL wins, then localStorage, then default)
+  // Restore last selected location on initial load
   useEffect(() => {
     const fromUrl = getLocationFromUrl();
     if (fromUrl) {
@@ -124,7 +128,6 @@ function AppContent() {
     } catch {
       // ignore
     }
-    // Default fallback to Ratchaburi
     const defaultLoc: GeoLocation = {
       id: 1150965,
       name: 'Ratchaburi',
@@ -160,15 +163,15 @@ function AppContent() {
         return acc;
       }, {} as Record<string, { total: number; count: number }>);
 
-      const aggs: VoteAggregate[] = Object.entries(grouped).map(([model_id, val]) => ({
-        model_id,
-        average_rating: val.total / val.count,
-        vote_count: val.count,
+      const aggs: VoteAggregate[] = Object.entries(grouped).map(([modelId, { total, count }]) => ({
+        modelId,
+        averageRating: total / count,
+        totalVotes: count,
       }));
 
       setLocalVotes(aggs);
-    } catch (e) {
-      console.error('Failed to load local votes:', e);
+    } catch {
+      // ignore
     }
   }, []);
 
@@ -189,152 +192,112 @@ function AppContent() {
         return acc;
       }, {} as Record<string, { total: number; count: number }>);
 
-      const aggs: VoteAggregate[] = Object.entries(grouped).map(([model_id, val]) => ({
-        model_id,
-        average_rating: val.total / val.count,
-        vote_count: val.count,
+      const aggs: VoteAggregate[] = Object.entries(grouped).map(([modelId, { total, count }]) => ({
+        modelId,
+        averageRating: total / count,
+        totalVotes: count,
       }));
 
       setGlobalVotes(aggs);
-    } catch (e) {
-      console.error('Failed to load global votes:', e);
+    } catch {
+      // ignore
     }
   }, []);
 
-  const loadWeatherData = useCallback(async (loc: GeoLocation, isManualRefresh = false) => {
-    if (!isManualRefresh) {
+  const loadWeatherData = useCallback(
+    async (loc: GeoLocation) => {
       setLoading(true);
-    }
-    setError(null);
-    try {
-      const [cur, hr, dy] = await Promise.all([
-        fetchCurrentWeather(loc.latitude, loc.longitude, loc.timezone),
-        fetchHourlyForecast(loc.latitude, loc.longitude, loc.timezone),
-        fetchDailyForecast(loc.latitude, loc.longitude, loc.timezone),
-      ]);
-      setCurrent(cur);
-      setHourly(hr);
-      setDaily(dy);
-      setLastUpdated(new Date());
-
-      if (isManualRefresh) {
-        setShowRefreshToast(true);
-        if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-        refreshTimerRef.current = setTimeout(() => {
-          setShowRefreshToast(false);
-        }, 3200);
-      }
-
-      // Test accuracy across models in parallel with weather load
-      testModelAccuracy(loc.latitude, loc.longitude, loc.timezone)
-        .then((acc) => setAccuracyResults(acc))
-        .catch((err) => console.error('Accuracy test failed:', err));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch weather data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  const handleSelect = useCallback(
-    (loc: GeoLocation) => {
-      setLocation(loc);
+      setError(null);
       try {
-        localStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(loc));
-      } catch {
-        // ignore
+        const [weatherData, accuracyData] = await Promise.all([
+          fetchForecastWithSnapshots(loc.latitude, loc.longitude, loc.timezone),
+          runAccuracyTests(loc),
+        ]);
+        setTopModel(weatherData.topModel);
+        setCurrent(weatherData.current);
+        setHourly(weatherData.hourly);
+        setDaily(weatherData.daily);
+        setAccuracyResults(accuracyData);
+        setLastUpdated(new Date());
+
+        // Save last location
+        try {
+          localStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(loc));
+        } catch {
+          // ignore
+        }
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch weather data');
+      } finally {
+        setLoading(false);
       }
-      syncLocationToUrl(loc);
-      loadWeatherData(loc, false);
-      loadLocalVotes(loc);
     },
-    [loadWeatherData, loadLocalVotes]
+    [],
   );
 
-  const handleLocateMe = useCallback(() => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser');
-      return;
-    }
-    setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        try {
-          const res = await fetch(
-            `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&count=1`
-          );
-          const data = await res.json();
-          const place = data?.results?.[0];
-          const newLoc: GeoLocation = {
-            id: place?.id ?? Math.round(Math.abs(lat * 1000 + lon * 10)),
-            name: place?.name ?? 'My Location',
-            latitude: lat,
-            longitude: lon,
-            country: place?.country ?? '',
-            country_code: place?.country_code ?? '',
-            timezone: place?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'auto',
-          };
-          handleSelect(newLoc);
-        } catch {
-          const fallbackLoc: GeoLocation = {
-            id: Math.round(Math.abs(lat * 1000 + lon * 10)),
-            name: 'My Location',
-            latitude: lat,
-            longitude: lon,
-            country: '',
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'auto',
-          };
-          handleSelect(fallbackLoc);
-        }
-      },
-      (err) => {
-        setLoading(false);
-        alert(`Could not get your location: ${err.message}`);
-      },
-      { timeout: 10000 }
-    );
-  }, [handleSelect]);
-
-  useEffect(() => {
-    if (location && restored) {
-      loadWeatherData(location, false);
-      loadLocalVotes(location);
-      loadGlobalVotes();
-    }
-  }, [location, restored, loadWeatherData, loadLocalVotes, loadGlobalVotes]);
-
-  const topModel: WeatherModel = useMemo(() => {
-    if (accuracyResults.length > 0) {
-      const sorted = [...accuracyResults].sort((a, b) => b.overallScore - a.overallScore);
-      const topAcc = sorted[0];
-      const found = WEATHER_MODELS.find((m) => m.id === topAcc.modelId);
-      if (found) return found;
-    }
-    return WEATHER_MODELS[0];
-  }, [accuracyResults]);
-
-  const handleRefresh = useCallback(() => {
-    if (location && !refreshing) {
-      setRefreshing(true);
-      loadWeatherData(location, true);
-      loadLocalVotes(location);
-      loadGlobalVotes();
+  const handleRefresh = useCallback(async () => {
+    if (!location || refreshing) return;
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadWeatherData(location),
+        loadLocalVotes(location),
+        loadGlobalVotes(),
+      ]);
+      setShowRefreshToast(true);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => {
+        setShowRefreshToast(false);
+      }, 4000);
+    } finally {
+      setRefreshing(false);
     }
   }, [location, refreshing, loadWeatherData, loadLocalVotes, loadGlobalVotes]);
 
+  useEffect(() => {
+    if (restored && location) {
+      loadWeatherData(location);
+      loadLocalVotes(location);
+      loadGlobalVotes();
+    }
+  }, [restored, location, loadWeatherData, loadLocalVotes, loadGlobalVotes]);
+
+  const handleSelect = (loc: GeoLocation) => {
+    setLocation(loc);
+    syncLocationToUrl(loc);
+  };
+
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      alert(t('geolocationNotSupported'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc: GeoLocation = {
+          id: Date.now(),
+          name: t('currentLocation'),
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          country: '',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        };
+        handleSelect(loc);
+      },
+      () => {
+        alert(t('unableToRetrieveLocation'));
+      },
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 shadow-lg shadow-sky-500/20">
-              <CloudSun size={24} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold leading-none text-white sm:text-xl">
+            <div className="flex items-center gap-2">
+              <CloudRain className="h-6 w-6 text-sky-400" />
+              <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">
                 Model Cast
               </h1>
             </div>
@@ -357,16 +320,20 @@ function AppContent() {
               refreshing={refreshing}
               onShare={shareUrl}
               onBackup={exportBackup}
-              onRestore={() => fileInputRef.current?.click()}
+              onRestore={() => setShowRestoreModal(true)}
             />
+            {/* Unlocked file picker allowing Google Drive files */}
             <input
               ref={fileInputRef}
               type="file"
-              accept=".json"
+              accept=".json,application/json,text/plain,*/*"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) importBackup(file);
+                if (file) {
+                  importBackup(file);
+                  setShowRestoreModal(false);
+                }
                 e.target.value = '';
               }}
             />
@@ -418,35 +385,34 @@ function AppContent() {
           )}
         </section>
 
-        {!location && !loading && restored && (
-          <div className="rounded-3xl border border-slate-700/50 bg-slate-800/40 p-8 text-center sm:p-12">
-            <Globe2 size={48} className="mx-auto mb-4 text-slate-600" />
-            <p className="text-lg font-medium text-slate-300">{t('searchToBegin')}</p>
-            <p className="mt-1 text-sm text-slate-500">{t('searchHint')}</p>
-          </div>
-        )}
-
         {loading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 size={40} className="animate-spin text-sky-400" />
-            <p className="mt-4 text-slate-400">{t('fetchingForecasts')}</p>
+          <div className="flex h-64 flex-col items-center justify-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
+            <p className="text-sm text-slate-400">{t('loadingForecast')}</p>
           </div>
         )}
 
         {error && !loading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <AlertTriangle size={40} className="mb-4 text-amber-400" />
-            <p className="text-lg font-medium text-slate-300">{error}</p>
-            <p className="mt-1 text-sm text-slate-500">{t('tryAnother')}</p>
+          <div className="mx-auto max-w-md rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-center">
+            <AlertTriangle className="mx-auto h-8 w-8 text-rose-400" />
+            <p className="mt-2 font-medium text-rose-300">{error}</p>
+            <button
+              onClick={() => location && loadWeatherData(location)}
+              className="mt-4 rounded-xl bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            >
+              {t('tryAgain')}
+            </button>
           </div>
         )}
 
         {location && !loading && !error && current && hourly && daily && activeView === 'forecast' && (
           <div className="space-y-6">
             <CurrentWeatherCard
-              weather={current}
-              locationName={location.name}
-              country={location.country}
+              location={location}
+              current={current}
+              topModel={topModel}
+              daily={daily}
+              onOpenModels={() => setShowModels(true)}
             />
 
             {/* Live Timestamp with exact seconds for clear refresh proof */}
@@ -469,7 +435,7 @@ function AppContent() {
               </div>
             )}
 
-            {/* Day & Night Weather Report Summary (Sun, Moon, Narrative, Pressure, UV) */}
+            {/* Day & Night Weather Report Summary */}
             <DayNightSummary
               location={location}
               current={current}
@@ -527,6 +493,75 @@ function AppContent() {
         </div>
       )}
 
+      {/* Restore Modal for Phone & Google Drive */}
+      {showRestoreModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Upload size={18} className="text-sky-400" />
+                Restore Backup
+              </h3>
+              <button
+                onClick={() => setShowRestoreModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {/* Option A: Select from Google Drive or Phone files */}
+              <button
+                type="button"
+                onClick={() => {
+                  fileInputRef.current?.click();
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-sky-500/40 bg-sky-500/15 p-3 text-left transition hover:bg-sky-500/25 active:scale-95"
+              >
+                <Upload size={20} className="text-sky-400 shrink-0" />
+                <div>
+                  <div className="text-sm font-semibold text-sky-200">
+                    Open File (Google Drive / Files)
+                  </div>
+                  <div className="text-xs text-sky-300/80">
+                    Tap the ☰ menu in your file picker to select Google Drive
+                  </div>
+                </div>
+              </button>
+
+              <div className="relative py-1 text-center text-xs text-slate-500">
+                <span>OR PASTE CODE</span>
+              </div>
+
+              {/* Option B: Direct Paste */}
+              <div className="space-y-2">
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder="Paste your backup JSON text here..."
+                  className="w-full h-24 rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-600 focus:border-sky-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={!pasteText.trim()}
+                  onClick={() => {
+                    if (pasteText.trim()) {
+                      importBackup(pasteText.trim());
+                      setShowRestoreModal(false);
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-sky-500 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:opacity-40"
+                >
+                  <FileText size={16} />
+                  Restore Pasted Code
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {location && hourly && daily && (
         <WeatherModelsLiveModal
           open={showModels}
@@ -543,7 +578,12 @@ function AppContent() {
         />
       )}
 
-      <LiveTrackersModal open={showTrackers} onClose={() => setShowTrackers(false)} location={location} hourly={hourly} />
+      <LiveTrackersModal
+        open={showTrackers}
+        onClose={() => setShowTrackers(false)}
+        location={location}
+        hourly={hourly}
+      />
     </div>
   );
 }
