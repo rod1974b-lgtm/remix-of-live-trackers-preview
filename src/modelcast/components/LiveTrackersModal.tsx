@@ -106,6 +106,7 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
     feelsLike: number;
     temp: number;
     humidity: number;
+    windSpeed: number;
     windGusts: number;
     maxGustsToday: number;
     rain3DaySum: number;
@@ -164,12 +165,14 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
           const baseline = pastMin > 1 ? pastMin : 10;
           const surgePct = todayFlow > baseline ? ((todayFlow - baseline) / baseline) * 100 : 0;
 
+          // Level is based on the surge ABOVE the 7-day baseline, not the raw
+          // flow — a big river can run 1,500+ m³/s as its normal seasonal flow.
           let level: 'critical' | 'watch' | 'advisory' | 'safe' = 'safe';
-          if ((surgePct >= 120 || todayFlow >= 3000) && todayFlow > 50) {
+          if (surgePct >= 120 && todayFlow > 50) {
             level = 'critical';
-          } else if ((surgePct >= 60 || todayFlow >= 1500) && todayFlow > 30) {
+          } else if (surgePct >= 60 && todayFlow > 30) {
             level = 'watch';
-          } else if ((surgePct >= 25 || todayFlow >= 500) && todayFlow > 15) {
+          } else if (surgePct >= 25 && todayFlow > 15) {
             level = 'advisory';
           }
 
@@ -210,6 +213,7 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
             feelsLike: Math.round(cur.apparent_temperature ?? cur.temperature_2m ?? 32),
             temp: Math.round(cur.temperature_2m ?? 30),
             humidity: Math.round(cur.relative_humidity_2m ?? 70),
+            windSpeed: Math.round(cur.wind_speed_10m ?? 0),
             windGusts: Math.round(cur.wind_gusts_10m ?? 15),
             maxGustsToday: Math.round(maxGustsToday),
             rain3DaySum: Math.round(rain3Day * 10) / 10,
@@ -346,15 +350,15 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
           <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-3 shadow-sm">
             <div className="flex items-center justify-between text-xs font-bold text-slate-400">
               <span>⚡ Lightning</span>
-              <span className={atmo?.isThunderstorm || (atmo?.stormProb ?? 0) >= 70 ? 'text-amber-400' : 'text-emerald-400'}>
-                {atmo?.isThunderstorm ? 'HIGH' : (atmo?.stormProb ?? 0) >= 50 ? 'ELEVATED' : 'LOW'}
+              <span className={atmo?.isThunderstorm ? 'text-amber-400' : 'text-emerald-400'}>
+                {atmo?.isThunderstorm ? 'HIGH' : 'SAFE'}
               </span>
             </div>
             <div className="text-base font-extrabold text-white mt-1">
-              {atmo?.isThunderstorm ? 'Active Cells' : (atmo?.stormProb ?? 0) >= 50 ? 'Rain Showers' : 'Scattered'}
+              {atmo?.isThunderstorm ? 'Active Cells' : (atmo?.stormProb ?? 0) >= 50 ? 'Rain (No Strikes)' : 'Quiet'}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              {atmo ? `${atmo.stormProb}% precip prob` : 'Under 10 strikes/hr'}
+              {atmo?.isThunderstorm ? 'Thunderstorm detected' : '0 strikes detected'}
             </div>
           </div>
 
@@ -396,16 +400,18 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
           {/* 3. Wind Gusts */}
           <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-3 shadow-sm">
             <div className="flex items-center justify-between text-xs font-bold text-slate-400">
-              <span>💨 Wind Gusts</span>
+              <span>💨 Wind</span>
               <span className={(atmo?.maxGustsToday ?? 0) >= 50 ? 'text-red-400' : (atmo?.maxGustsToday ?? 0) >= 30 ? 'text-amber-400' : 'text-emerald-400'}>
                 {(atmo?.maxGustsToday ?? 0) >= 50 ? 'GALE' : (atmo?.maxGustsToday ?? 0) >= 30 ? 'GUSTY' : 'CALM'}
               </span>
             </div>
             <div className="text-base font-extrabold text-white mt-1">
-              {atmo ? `${uW(atmo.windGusts, units)}–${uW(atmo.maxGustsToday, units)} ${uWL(units)}` : `${uW(15, units)}–${uW(25, units)} ${uWL(units)}`}
+              {atmo ? `${uW(atmo.windSpeed, units)} ${uWL(units)}` : '—'}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              {(atmo?.maxGustsToday ?? 0) >= 35 ? 'Hold loose objects' : 'Breeze • safe'}
+              {atmo
+                ? `Gusts to ${uW(atmo.windGusts, units)} ${uWL(units)} • ${(atmo.maxGustsToday ?? 0) >= 35 ? 'Hold loose objects' : 'Breeze • safe'}`
+                : 'Breeze • safe'}
             </div>
           </div>
 
