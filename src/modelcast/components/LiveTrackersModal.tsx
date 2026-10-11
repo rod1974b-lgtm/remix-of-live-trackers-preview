@@ -406,10 +406,12 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
               </span>
             </div>
             <div className="text-base font-extrabold text-white mt-1">
-              {atmo ? `${uW(atmo.windGusts, units)}–${uW(atmo.maxGustsToday, units)} ${uWL(units)}` : `${uW(15, units)}–${uW(25, units)} ${uWL(units)}`}
+              {atmo ? `${uW(atmo.windSpeed, units)} ${uWL(units)}` : '—'}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              {(atmo?.maxGustsToday ?? 0) >= 35 ? 'Hold loose objects' : 'Breeze • safe'}
+              {atmo
+                ? `Gusts to ${uW(atmo.windGusts, units)} ${uWL(units)} • ${(atmo.maxGustsToday ?? 0) >= 35 ? 'Hold loose objects' : 'Breeze • safe'}`
+                : 'Breeze • safe'}
             </div>
           </div>
 
