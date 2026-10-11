@@ -34,7 +34,7 @@ import {
   tempUnitLabel,
 } from '@/modelcast/lib/units';
 import { formatHour, formatDayName, isToday, getHourIndex } from '@/modelcast/lib/utils';
-import { WEATHER_MODELS } from '@/modelcast/lib/weatherModels';
+import { WEATHER_MODELS, getModelById } from '@/modelcast/lib/weatherModels';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Sun,
@@ -70,12 +70,12 @@ interface DayNightSummary {
 }
 
 function computeDayNightSummary(
-  hourlyTime: string[],
-  hourlyTemp: (number | null)[],
-  hourlyPrecip: (number | null)[],
-  hourlyWind: (number | null)[],
-  hourlyHumidity: (number | null)[],
-  hourlyCode: (number | null)[],
+  hourlyTime: string[] = [],
+  hourlyTemp: (number | null)[] = [],
+  hourlyPrecip: (number | null)[] = [],
+  hourlyWind: (number | null)[] = [],
+  hourlyHumidity: (number | null)[] = [],
+  hourlyCode: (number | null)[] = [],
   dateStr: string,
   startHour: number,
   endHour: number,
@@ -83,6 +83,7 @@ function computeDayNightSummary(
   const indices: number[] = [];
   for (let i = 0; i < hourlyTime.length; i++) {
     const time = hourlyTime[i];
+    if (!time) continue;
     const datePart = time.slice(0, 10);
     const h = Number(time.slice(11, 13));
     if (datePart === dateStr && h >= startHour && h < endHour) {
@@ -92,18 +93,39 @@ function computeDayNightSummary(
 
   if (indices.length === 0) {
     return {
-      avgTemp: null, maxTemp: null, minTemp: null,
-      totalPrecip: 0, maxWind: 0, avgHumidity: null,
+      avgTemp: null,
+      maxTemp: null,
+      minTemp: null,
+      totalPrecip: 0,
+      maxWind: 0,
+      avgHumidity: null,
       dominantCode: 0,
-      hourlyTemps: [], hourlyTimes: [], hourlyPrecips: [], hourlyCodes: [],
+      hourlyTemps: [],
+      hourlyTimes: [],
+      hourlyPrecips: [],
+      hourlyCodes: [],
     };
   }
 
-  const temps = indices.map((i) => hourlyTemp[i]).filter((v): v is number => v !== null);
-  const hums = indices.map((i) => hourlyHumidity[i]).filter((v): v is number => v !== null);
-  const winds = indices.map((i) => hourlyWind[i]).filter((v): v is number => v !== null);
-  const precips = indices.map((i) => hourlyPrecip[i] ?? 0);
-  const codes = indices.map((i) => hourlyCode[i] ?? 0);
+  const temps = indices
+    .map((i) => hourlyTemp[i])
+    .filter((v): v is number => typeof v === 'number' && !isNaN(v));
+
+  const hums = indices
+    .map((i) => hourlyHumidity[i])
+    .filter((v): v is number => typeof v === 'number' && !isNaN(v));
+
+  const winds = indices
+    .map((i) => hourlyWind[i])
+    .filter((v): v is number => typeof v === 'number' && !isNaN(v));
+
+  const precips = indices
+    .map((i) => hourlyPrecip[i])
+    .map((v) => (typeof v === 'number' && !isNaN(v) ? v : 0));
+
+  const codes = indices
+    .map((i) => hourlyCode[i])
+    .map((v) => (typeof v === 'number' && !isNaN(v) ? v : 0));
 
   const codeFreq: Record<number, number> = {};
   for (const c of codes) codeFreq[c] = (codeFreq[c] ?? 0) + 1;
@@ -113,20 +135,20 @@ function computeDayNightSummary(
     avgTemp: temps.length > 0 ? temps.reduce((a, b) => a + b, 0) / temps.length : null,
     maxTemp: temps.length > 0 ? Math.max(...temps) : null,
     minTemp: temps.length > 0 ? Math.min(...temps) : null,
-    totalPrecip: precips.reduce((a, b) => a + b, 0),
+    totalPrecip: precips.length > 0 ? precips.reduce((a, b) => a + b, 0) : 0,
     maxWind: winds.length > 0 ? Math.max(...winds) : 0,
     avgHumidity: hums.length > 0 ? hums.reduce((a, b) => a + b, 0) / hums.length : null,
     dominantCode: Number(dominantCode),
-    hourlyTemps: indices.map((i) => hourlyTemp[i]),
-    hourlyTimes: indices.map((i) => hourlyTime[i]),
-    hourlyPrecips: indices.map((i) => hourlyPrecip[i]),
-    hourlyCodes: indices.map((i) => hourlyCode[i]),
+    hourlyTemps: indices.map((i) => (typeof hourlyTemp[i] === 'number' && !isNaN(hourlyTemp[i]) ? hourlyTemp[i] : null)),
+    hourlyTimes: indices.map((i) => hourlyTime[i] ?? ''),
+    hourlyPrecips: indices.map((i) => (typeof hourlyPrecip[i] === 'number' && !isNaN(hourlyPrecip[i]) ? hourlyPrecip[i] : 0)),
+    hourlyCodes: indices.map((i) => (typeof hourlyCode[i] === 'number' && !isNaN(hourlyCode[i]) ? hourlyCode[i] : 0)),
   };
 }
 
 interface TopModelForecastProps {
   location: GeoLocation;
-  model: WeatherModel;
+  model: WeatherModel | string;
   current: CurrentWeather;
   hourly: HourlyForecast;
   daily: DailyForecast;
@@ -137,7 +159,7 @@ interface TopModelForecastProps {
 
 export function TopModelForecast({
   location,
-  model: autoModel,
+  model: autoModelProp,
   current,
   hourly,
   daily,
@@ -149,14 +171,39 @@ export function TopModelForecast({
   const [expandedDay, setExpandedDay] = useState(0);
   const [selectedModelId, setSelectedModelId] = useState('auto');
 
+  // Resolve autoModel safely whether passed as object or string ID,
+  // and guarantee it points to a model with real data
+  const autoModel: WeatherModel = useMemo(() => {
+    let base: WeatherModel | undefined;
+    if (typeof autoModelProp === 'string') {
+      base = getModelById(autoModelProp) ?? WEATHER_MODELS.find((m) => m.id === autoModelProp);
+    } else if (autoModelProp && typeof autoModelProp === 'object' && 'id' in autoModelProp) {
+      base = autoModelProp as WeatherModel;
+    }
+
+    const hasData = base && hourly?.models?.[base.id]?.temperature?.some((temp) => typeof temp === 'number' && !isNaN(temp));
+    if (hasData && base) return base;
+
+    // Fallback to first available model with actual forecast numbers
+    if (hourly?.models) {
+      const workingId = Object.keys(hourly.models).find((id) =>
+        hourly.models[id]?.temperature?.some((temp) => typeof temp === 'number' && !isNaN(temp)),
+      );
+      if (workingId) {
+        return getModelById(workingId) ?? WEATHER_MODELS.find((m) => m.id === workingId) ?? WEATHER_MODELS[0];
+      }
+    }
+
+    return base ?? WEATHER_MODELS[0];
+  }, [autoModelProp, hourly]);
+
   const model = useMemo(() => {
     if (selectedModelId === 'auto') return autoModel;
     return WEATHER_MODELS.find((m) => m.id === selectedModelId) ?? autoModel;
   }, [selectedModelId, autoModel]);
 
-  const modelData = hourly.models[model.id];
-  const dailyData = daily.models[model.id];
-
+  const modelData = hourly?.models?.[model.id] ?? hourly?.models?.[autoModel.id];
+  const dailyData = daily?.models?.[model.id] ?? daily?.models?.[autoModel.id];
 
   const voteAgg = votes.find((v) => v.model_id === model.id);
   const rating = voteAgg?.avg_rating ?? 0;
@@ -172,27 +219,27 @@ export function TopModelForecast({
   const endIdx = Math.min(startIdx + VIEW_HOURS, hourly.time.length);
 
   const hours = hourly.time.slice(startIdx, endIdx);
-  const temps = modelData?.temperature.slice(startIdx, endIdx) ?? [];
-  const precips = modelData?.precipitation.slice(startIdx, endIdx) ?? [];
-  const codes = modelData?.weatherCode.slice(startIdx, endIdx) ?? [];
-  const currentTemp = current.temperature;
-  const currentCode = current.weatherCode;
+  const temps = modelData?.temperature?.slice(startIdx, endIdx) ?? [];
+  const precips = modelData?.precipitation?.slice(startIdx, endIdx) ?? [];
+  const codes = modelData?.weatherCode?.slice(startIdx, endIdx) ?? [];
+  const currentTemp = current?.temperature ?? 0;
+  const currentCode = current?.weatherCode ?? 0;
   const currentInfo = getWeatherCodeInfo(currentCode);
-  const currentWind = current.windSpeed;
-  const currentHumidity = current.humidity;
+  const currentWind = current?.windSpeed ?? 0;
+  const currentHumidity = current?.humidity ?? 0;
 
-  const todayHigh = dailyData?.tempMax[0] ?? 0;
-  const todayLow = dailyData?.tempMin[0] ?? 0;
+  const todayHigh = dailyData?.tempMax?.[0] ?? currentTemp;
+  const todayLow = dailyData?.tempMin?.[0] ?? currentTemp;
 
   const days = daily.time.slice(0, 7);
-  const dailyMax = dailyData?.tempMax.slice(0, 7) ?? [];
-  const dailyMin = dailyData?.tempMin.slice(0, 7) ?? [];
-  const dailyCodes = dailyData?.weatherCode.slice(0, 7) ?? [];
-  const dailyPrecip = dailyData?.precipitationSum.slice(0, 7) ?? [];
-  const dailyWind = dailyData?.windSpeedMax.slice(0, 7) ?? [];
+  const dailyMax = dailyData?.tempMax?.slice(0, 7) ?? [];
+  const dailyMin = dailyData?.tempMin?.slice(0, 7) ?? [];
+  const dailyCodes = dailyData?.weatherCode?.slice(0, 7) ?? [];
+  const dailyPrecip = dailyData?.precipitationSum?.slice(0, 7) ?? [];
+  const dailyWind = dailyData?.windSpeedMax?.slice(0, 7) ?? [];
 
-  const allDailyMax = dailyMax.filter((v): v is number => v !== null);
-  const allDailyMin = dailyMin.filter((v): v is number => v !== null);
+  const allDailyMax = dailyMax.filter((v): v is number => typeof v === 'number' && !isNaN(v));
+  const allDailyMin = dailyMin.filter((v): v is number => typeof v === 'number' && !isNaN(v));
   const weekMin = allDailyMin.length > 0 ? Math.min(...allDailyMin) : 0;
   const weekMax = allDailyMax.length > 0 ? Math.max(...allDailyMax) : 1;
   const weekRange = weekMax - weekMin || 1;
@@ -472,6 +519,11 @@ function DayRow({
     () => {
       const firstHalf = computeDayNightSummary(hTime, hTemp, hPrecip, hWind, hHum, hCode, day, 0, 6);
       const secondHalf = computeDayNightSummary(hTime, hTemp, hPrecip, hWind, hHum, hCode, day, 18, 24);
+      
+      const combinedTemps = [...firstHalf.hourlyTemps, ...secondHalf.hourlyTemps].filter(
+        (v): v is number => typeof v === 'number' && !isNaN(v),
+      );
+
       return {
         ...firstHalf,
         totalPrecip: firstHalf.totalPrecip + secondHalf.totalPrecip,
@@ -480,20 +532,16 @@ function DayRow({
         hourlyTimes: [...firstHalf.hourlyTimes, ...secondHalf.hourlyTimes],
         hourlyPrecips: [...firstHalf.hourlyPrecips, ...secondHalf.hourlyPrecips],
         hourlyCodes: [...firstHalf.hourlyCodes, ...secondHalf.hourlyCodes],
-        avgTemp: [firstHalf, secondHalf].every((s) => s.avgTemp === null)
-          ? null
-          : [firstHalf, secondHalf].filter((s) => s.avgTemp !== null).reduce((a, s) => a + (s.avgTemp ?? 0), 0) /
-            [firstHalf, secondHalf].filter((s) => s.avgTemp !== null).length,
-        maxTemp: Math.max(firstHalf.maxTemp ?? -Infinity, secondHalf.maxTemp ?? -Infinity) === -Infinity
-          ? null : Math.max(firstHalf.maxTemp ?? -Infinity, secondHalf.maxTemp ?? -Infinity),
-        minTemp: Math.min(firstHalf.minTemp ?? Infinity, secondHalf.minTemp ?? Infinity) === Infinity
-          ? null : Math.min(firstHalf.minTemp ?? Infinity, secondHalf.minTemp ?? Infinity),
-        avgHumidity: [firstHalf, secondHalf].every((s) => s.avgHumidity === null)
-          ? null
-          : [firstHalf, secondHalf].filter((s) => s.avgHumidity !== null).reduce((a, s) => a + (s.avgHumidity ?? 0), 0) /
-            [firstHalf, secondHalf].filter((s) => s.avgHumidity !== null).length,
+        avgTemp: combinedTemps.length > 0 ? combinedTemps.reduce((a, b) => a + b, 0) / combinedTemps.length : null,
+        maxTemp: combinedTemps.length > 0 ? Math.max(...combinedTemps) : null,
+        minTemp: combinedTemps.length > 0 ? Math.min(...combinedTemps) : null,
+        avgHumidity:
+          firstHalf.avgHumidity !== null && secondHalf.avgHumidity !== null
+            ? (firstHalf.avgHumidity + secondHalf.avgHumidity) / 2
+            : firstHalf.avgHumidity ?? secondHalf.avgHumidity,
         dominantCode: firstHalf.hourlyTimes.length >= secondHalf.hourlyTimes.length
-          ? firstHalf.dominantCode : secondHalf.dominantCode,
+          ? firstHalf.dominantCode
+          : secondHalf.dominantCode,
       };
     },
     [hTime, hTemp, hPrecip, hWind, hHum, hCode, day],
@@ -589,7 +637,7 @@ function PeriodCard({
   const info = getWeatherCodeInfo(summary.dominantCode);
   const hasHourly = summary.hourlyTemps.length > 0;
 
-  const allVals = summary.hourlyTemps.filter((v): v is number => v !== null);
+  const allVals = summary.hourlyTemps.filter((v): v is number => typeof v === 'number' && !isNaN(v));
   const minVal = allVals.length > 0 ? Math.min(...allVals) : 0;
   const maxVal = allVals.length > 0 ? Math.max(...allVals) : 1;
   const valRange = maxVal - minVal || 1;
@@ -598,16 +646,18 @@ function PeriodCard({
   const chartW = 100;
 
   const points = summary.hourlyTemps.map((v, i) => {
-    if (v === null) return null;
+    if (typeof v !== 'number' || isNaN(v)) return null;
     const x = (i / Math.max(summary.hourlyTemps.length - 1, 1)) * chartW;
     const y = chartH - ((v - minVal) / valRange) * (chartH - 8) - 4;
     return { x, y, v };
   });
 
-  const pathD = points
-    .filter((p): p is { x: number; y: number; v: number } => p !== null)
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
-    .join(' ');
+  const validPoints = points.filter((p): p is { x: number; y: number; v: number } => p !== null && !isNaN(p.x) && !isNaN(p.y));
+  const pathD = validPoints.length > 1
+    ? validPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+    : '';
+
+  const displayTemp = title === 'Day' ? summary.maxTemp : summary.minTemp;
 
   return (
     <div className="rounded-2xl border border-slate-700/50 bg-slate-800/40 p-4">
@@ -623,7 +673,7 @@ function PeriodCard({
       <div className="mt-3 flex items-end gap-3">
         <div className="flex items-baseline gap-2">
           <p className="text-4xl font-semibold text-white">
-            {formatTemp(title === 'Day' ? summary.maxTemp : summary.minTemp, units)}°
+            {formatTemp(displayTemp, units)}°
           </p>
           <p className="text-sm text-slate-300">{info.label}</p>
         </div>
@@ -669,9 +719,11 @@ function PeriodCard({
         <DetailMetric
           icon={<Thermometer size={14} />}
           label="Range"
-          value={summary.maxTemp !== null && summary.minTemp !== null
-            ? `${formatTemp(summary.maxTemp, units)}° / ${formatTemp(summary.minTemp, units)}°`
-            : '—'}
+          value={
+            summary.maxTemp !== null && summary.minTemp !== null
+              ? `${formatTemp(summary.maxTemp, units)}° / ${formatTemp(summary.minTemp, units)}°`
+              : '—'
+          }
         />
       </div>
     </div>
