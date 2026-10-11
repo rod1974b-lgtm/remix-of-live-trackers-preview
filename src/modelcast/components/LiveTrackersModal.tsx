@@ -400,7 +400,7 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
           {/* 3. Wind Gusts */}
           <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-3 shadow-sm">
             <div className="flex items-center justify-between text-xs font-bold text-slate-400">
-              <span>💨 Wind Gusts</span>
+              <span>💨 Wind</span>
               <span className={(atmo?.maxGustsToday ?? 0) >= 50 ? 'text-red-400' : (atmo?.maxGustsToday ?? 0) >= 30 ? 'text-amber-400' : 'text-emerald-400'}>
                 {(atmo?.maxGustsToday ?? 0) >= 50 ? 'GALE' : (atmo?.maxGustsToday ?? 0) >= 30 ? 'GUSTY' : 'CALM'}
               </span>
