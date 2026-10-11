@@ -291,9 +291,9 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col font-sans">
+      <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
+        <div className="mx-auto flex w-full min-w-0 max-w-6xl items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <CloudRain className="h-6 w-6 text-sky-400" />
@@ -341,7 +341,7 @@ function AppContent() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <main className="mx-auto w-full min-w-0 max-w-6xl px-3 sm:px-6 py-4 sm:py-8 overflow-x-hidden">
         <section className="mb-6 text-center">
           <h2 className="text-2xl font-bold text-white sm:text-3xl">
             {t('findBest')}
