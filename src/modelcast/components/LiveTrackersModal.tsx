@@ -213,6 +213,7 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
             feelsLike: Math.round(cur.apparent_temperature ?? cur.temperature_2m ?? 32),
             temp: Math.round(cur.temperature_2m ?? 30),
             humidity: Math.round(cur.relative_humidity_2m ?? 70),
+            windSpeed: Math.round(cur.wind_speed_10m ?? 0),
             windGusts: Math.round(cur.wind_gusts_10m ?? 15),
             maxGustsToday: Math.round(maxGustsToday),
             rain3DaySum: Math.round(rain3Day * 10) / 10,
@@ -349,15 +350,15 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
           <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-3 shadow-sm">
             <div className="flex items-center justify-between text-xs font-bold text-slate-400">
               <span>⚡ Lightning</span>
-              <span className={atmo?.isThunderstorm || (atmo?.stormProb ?? 0) >= 70 ? 'text-amber-400' : 'text-emerald-400'}>
-                {atmo?.isThunderstorm ? 'HIGH' : (atmo?.stormProb ?? 0) >= 50 ? 'ELEVATED' : 'LOW'}
+              <span className={atmo?.isThunderstorm ? 'text-amber-400' : 'text-emerald-400'}>
+                {atmo?.isThunderstorm ? 'HIGH' : 'SAFE'}
               </span>
             </div>
             <div className="text-base font-extrabold text-white mt-1">
-              {atmo?.isThunderstorm ? 'Active Cells' : (atmo?.stormProb ?? 0) >= 50 ? 'Rain Showers' : 'Scattered'}
+              {atmo?.isThunderstorm ? 'Active Cells' : (atmo?.stormProb ?? 0) >= 50 ? 'Rain (No Strikes)' : 'Quiet'}
             </div>
             <div className="text-[11px] text-slate-400 mt-0.5">
-              {atmo ? `${atmo.stormProb}% precip prob` : 'Under 10 strikes/hr'}
+              {atmo?.isThunderstorm ? 'Thunderstorm detected' : '0 strikes detected'}
             </div>
           </div>
 
