@@ -106,6 +106,7 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
     feelsLike: number;
     temp: number;
     humidity: number;
+    windSpeed: number;
     windGusts: number;
     maxGustsToday: number;
     rain3DaySum: number;
@@ -164,12 +165,14 @@ function WarningsTracker({ location, onSelectTab }: { location: GeoLocation | nu
           const baseline = pastMin > 1 ? pastMin : 10;
           const surgePct = todayFlow > baseline ? ((todayFlow - baseline) / baseline) * 100 : 0;
 
+          // Level is based on the surge ABOVE the 7-day baseline, not the raw
+          // flow — a big river can run 1,500+ m³/s as its normal seasonal flow.
           let level: 'critical' | 'watch' | 'advisory' | 'safe' = 'safe';
-          if ((surgePct >= 120 || todayFlow >= 3000) && todayFlow > 50) {
+          if (surgePct >= 120 && todayFlow > 50) {
             level = 'critical';
-          } else if ((surgePct >= 60 || todayFlow >= 1500) && todayFlow > 30) {
+          } else if (surgePct >= 60 && todayFlow > 30) {
             level = 'watch';
-          } else if ((surgePct >= 25 || todayFlow >= 500) && todayFlow > 15) {
+          } else if (surgePct >= 25 && todayFlow > 15) {
             level = 'advisory';
           }
 
